@@ -265,9 +265,14 @@ const WheelOfLunchApp = () => {
       // Normalize rotation to 0-360
       const normalizedRotation = newRotation % 360;
       
-      // Calculate which slice is at the top (270 degrees)
-      const pointerAngle = (360 - normalizedRotation + 270) % 360;
-      const pointerFraction = pointerAngle / 360;
+      // The wheel starts drawing at -90° (top), and pointer is at top pointing down.
+      // After rotation, the angle at the pointer (top) is: (360 - normalizedRotation) % 360
+      // But since the wheel starts at -90° (270°), we need to account for that offset.
+      // The pointer is at angle 270° (top) in standard position.
+      // Effective angle on the wheel = (270 - normalizedRotation + 360) % 360
+      // But since slices are drawn clockwise from -90°, the angle within the wheel is:
+      const effectiveAngle = (360 - normalizedRotation) % 360;
+      const pointerFraction = effectiveAngle / 360;
       const targetWeight = pointerFraction * totalWeight;
       
       // Find which option this weight falls into
@@ -276,7 +281,7 @@ const WheelOfLunchApp = () => {
       
       for (const option of options) {
         cumulativeWeight += option.weight;
-        if (cumulativeWeight >= targetWeight) {
+        if (cumulativeWeight > targetWeight) {
           winnerOption = option;
           break;
         }
