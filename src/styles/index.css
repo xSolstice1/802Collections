@@ -1,0 +1,120 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-black text-black-200;
+    font-family: 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Custom scrollbar - simplified 2-color */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-black-900;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-black-600 rounded-full;
+    border: 1px solid transparent;
+    background-clip: content-box;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-802;
+  }
+
+  /* Selection styling */
+  ::selection {
+    @apply bg-802/30 text-802;
+  }
+}
+
+@layer components {
+  /* Glass effect - simplified */
+  .glass {
+    @apply backdrop-blur-md bg-black-800/50 border border-black-600/50;
+  }
+
+  /* Card component - simplified */
+  .card {
+    @apply rounded-xl p-6 transition-all duration-300;
+    @apply bg-black-800/80 border border-black-600/50;
+    @apply hover:border-802/50 hover:shadow-802/20;
+  }
+
+  /* Button variants - simplified 2-color */
+  .btn-primary {
+    @apply px-4 py-2 rounded-lg font-medium;
+    @apply bg-802 text-black;
+    @apply hover:bg-802-hover transition-colors duration-200;
+    @apply focus:outline-none focus:ring-2 focus:ring-802/50;
+  }
+
+  .btn-secondary {
+    @apply px-4 py-2 rounded-lg font-medium;
+    @apply bg-black-700 text-black-100 border border-black-500;
+    @apply hover:border-802/50 hover:text-802 transition-colors duration-200;
+    @apply focus:outline-none focus:ring-2 focus:ring-802/50;
+  }
+
+  .btn-ghost {
+    @apply px-4 py-2 rounded-lg font-medium;
+    @apply text-black-300;
+    @apply hover:text-802 hover:bg-802/10 transition-colors duration-200;
+    @apply focus:outline-none focus:ring-2 focus:ring-802/50;
+  }
+
+  /* Input styling - simplified */
+  .input {
+    @apply w-full px-4 py-2 rounded-lg;
+    @apply bg-black-700 border border-black-500 text-black-100;
+    @apply placeholder:text-black-400;
+    @apply focus:outline-none focus:border-802 focus:ring-1 focus:ring-802/50;
+    @apply transition-colors duration-200;
+  }
+
+  /* Glow text effect */
+  .text-glow {
+    text-shadow: 0 0 10px rgba(68,214,44,0.5);
+  }
+
+  /* Gradient border - simplified */
+  .gradient-border {
+    position: relative;
+    background: linear-gradient(var(--tw-gradient-stops)) padding-box,
+                linear-gradient(135deg, #44D62C, #37ad24) border-box;
+    border: 1px solid transparent;
+  }
+}
+
+@layer utilities {
+  /* Hide scrollbar but keep functionality */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Text gradient - simplified */
+  .text-gradient {
+    @apply bg-gradient-to-r from-802 to-802/60 bg-clip-text text-transparent;
+  }
+}

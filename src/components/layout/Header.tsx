@@ -1,0 +1,69 @@
+import { NavLink } from 'react-router-dom';
+import { Home, Github } from 'lucide-react';
+import { useApps } from '@store/useAppStore';
+import { appRegistry } from '@core/registry/appRegistry';
+
+/**
+ * Header Component
+ * 
+ * Minimalistic top navigation bar with quick links.
+ * Synced with sidebar to show all apps.
+ */
+export const Header = () => {
+  const storeApps = useApps();
+  const apps = storeApps.length > 0 ? storeApps : appRegistry.getEnabled();
+  
+  // Get all non-dashboard apps for the nav
+  const navApps = apps.filter(app => app.id !== 'dashboard');
+
+  return (
+    <header className="flex items-center justify-between px-6 py-3 border-b border-black-700 bg-black/50 backdrop-blur-sm">
+      {/* Left: Quick Nav Links - synced with sidebar */}
+      <nav className="flex items-center gap-1">
+        <NavLink
+          to="/"
+          className={({ isActive }) =>
+            `flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors
+            ${isActive 
+              ? 'bg-802/15 text-802' 
+              : 'text-black-400 hover:text-black-200 hover:bg-black-800'
+            }`
+          }
+        >
+          <Home className="w-4 h-4" />
+          <span className="hidden sm:inline">Home</span>
+        </NavLink>
+        
+        {navApps.map(app => (
+          <NavLink
+            key={app.id}
+            to={app.route}
+            className={({ isActive }) =>
+              `flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors
+              ${isActive 
+                ? 'bg-802/15 text-802' 
+                : 'text-black-400 hover:text-black-200 hover:bg-black-800'
+              }`
+            }
+          >
+            <span className="w-4 h-4">{app.icon}</span>
+            <span className="hidden sm:inline">{app.name}</span>
+          </NavLink>
+        ))}
+      </nav>
+
+      {/* Right: External Links */}
+      <div className="flex items-center gap-2">
+        <a
+          href="https://github.com/xSolstice1/802Collections"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm text-black-400 hover:text-black-200 hover:bg-black-800 transition-colors"
+        >
+          <Github className="w-4 h-4" />
+          <span className="hidden sm:inline">GitHub</span>
+        </a>
+      </div>
+    </header>
+  );
+};
