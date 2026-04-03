@@ -1,5 +1,5 @@
 import { Suspense, lazy } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter, Routes, Route } from 'react-router-dom';
 import type { AppDefinition } from '@model/index';
 import { ErrorBoundary } from '@components/ErrorBoundary';
 import { LoadingSpinner } from '@components/LoadingSpinner';
@@ -46,7 +46,7 @@ export const AppRoutes = ({ apps }: AppRoutesProps) => {
   const enabledApps = apps.filter(app => app.enabled);
 
   return (
-    <BrowserRouter>
+    <HashRouter>
       <Routes>
         {/* Main layout wrapper */}
         <Route path="/" element={<MainLayout apps={enabledApps} />}>
@@ -71,14 +71,14 @@ export const AppRoutes = ({ apps }: AppRoutesProps) => {
             />
           ))}
 
-          {/* Catch-all: redirect to home */}
-          <Route path="*" element={<Navigate to="/" replace />} />
+          {/* Catch-all: show home for unknown routes */}
+          <Route path="*" element={<Home />} />
         </Route>
 
         {/* Standalone routes (outside main layout if needed) */}
         {/* Add any standalone pages here */}
       </Routes>
-    </BrowserRouter>
+    </HashRouter>
   );
 };
 
