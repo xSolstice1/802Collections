@@ -297,7 +297,7 @@ const WheelOfLunchApp = () => {
 
   // Add new option
   const addOption = () => {
-    if (!newOption.trim() || options.length >= 10) return;
+    if (!newOption.trim()) return;
 
     const newOpt: WheelOption = {
       id: Date.now().toString(),
@@ -437,7 +437,7 @@ const WheelOfLunchApp = () => {
 
         {/* Options Section */}
         <div className="card">
-          <h3 className="text-lg font-semibold text-black-100 mb-4">Options ({options.length}/10)</h3>
+          <h3 className="text-lg font-semibold text-black-100 mb-4">Options ({options.length})</h3>
 
           {/* Add Option */}
           <div className="flex gap-2 mb-4">
@@ -449,11 +449,10 @@ const WheelOfLunchApp = () => {
               placeholder="Add option..."
               maxLength={20}
               className="input flex-1"
-              disabled={options.length >= 10}
             />
             <button
               onClick={addOption}
-              disabled={!newOption.trim() || options.length >= 10}
+              disabled={!newOption.trim()}
               className="btn-primary flex items-center gap-1 disabled:opacity-50"
             >
               <Plus className="w-4 h-4" />
