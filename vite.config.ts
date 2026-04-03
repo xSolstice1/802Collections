@@ -1,8 +1,15 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
+import { fileURLToPath } from 'url'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+
+// GitHub Pages base path - must match repo name exactly
+const base = '/802Collections/'
 
 export default defineConfig({
+  base: base,
   plugins: [react()],
   resolve: {
     alias: {
