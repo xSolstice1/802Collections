@@ -1,123 +1,107 @@
-import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { 
-  Search, 
-  ChevronLeft, 
-  ChevronRight,
+  X,
+  Grid3X3,
   Box
 } from 'lucide-react';
 import type { AppDefinition } from '@model/index';
-import { useAppStore } from '@store/useAppStore';
 
 interface SidebarProps {
   apps: AppDefinition[];
+  isOpen: boolean;
+  onClose: () => void;
 }
 
 /**
  * Sidebar Component
  * 
- * Minimal navigation sidebar with app launcher functionality.
- * Supports search and collapsible state.
+ * Responsive navigation sidebar with app launcher functionality.
+ * Collapsed by default on mobile, expanded on desktop.
  */
-export const Sidebar = ({ apps }: SidebarProps) => {
-  const [searchQuery, setSearchQuery] = useState('');
-  const { sidebarCollapsed, setSidebarCollapsed } = useAppStore();
+export const Sidebar = ({ apps, isOpen, onClose }: SidebarProps) => {
+  // Filter apps based on search (could add search later)
+  const filteredApps = apps.filter(app => app.enabled);
 
-  // Filter apps based on search
-  const filteredApps = apps.filter(app => {
-    if (!searchQuery) return app.enabled;
-    return app.enabled && (
-      app.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      app.description.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  });
+  // Close sidebar when navigating (for mobile)
+  const handleNavClick = () => {
+    if (window.innerWidth < 1024) {
+      onClose();
+    }
+  };
 
   return (
-    <aside 
-      className={`
-        flex flex-col bg-black border-r border-black-700
-        transition-all duration-300 ease-in-out
-        ${sidebarCollapsed ? 'w-16' : 'w-64'}
-      `}
-    >
-      {/* Logo / Brand */}
-      <div className="flex items-center justify-between p-4 border-b border-black-700">
-        {!sidebarCollapsed && (
+    <>
+      {/* Mobile overlay */}
+      {isOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          onClick={onClose}
+        />
+      )}
+
+      {/* Sidebar */}
+      <aside 
+        className={`
+          fixed lg:static inset-y-0 left-0 z-50
+          flex flex-col bg-black border-r border-black-700
+          transition-all duration-300 ease-in-out
+          ${isOpen ? 'translate-x-0 w-64' : '-translate-x-full w-64 lg:translate-x-0 lg:w-0 lg:overflow-hidden'}
+        `}
+      >
+        {/* Header with close button (mobile only) */}
+        <div className="flex items-center justify-between p-4 border-b border-black-700">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-802 flex items-center justify-center">
               <Box className="w-5 h-5 text-black" />
             </div>
             <span className="font-semibold text-black-100 text-sm">802Collections</span>
           </div>
-        )}
-        {sidebarCollapsed && (
-          <div className="w-8 h-8 rounded-lg bg-802 flex items-center justify-center mx-auto">
-            <Box className="w-5 h-5 text-black" />
-          </div>
-        )}
-      </div>
-
-      {/* Search */}
-      {!sidebarCollapsed && (
-        <div className="p-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-black-500" />
-            <input
-              type="text"
-              placeholder="Search apps..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="input pl-10 text-sm"
-            />
-          </div>
+          {/* Close button - only visible on mobile */}
+          <button 
+            onClick={onClose}
+            className="lg:hidden p-1 rounded-lg text-black-400 hover:text-black-200 hover:bg-black-800 transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
-      )}
 
-      {/* Apps List */}
-      <div className="flex-1 overflow-y-auto px-4 py-2">
-        {!sidebarCollapsed && (
+        {/* Apps List */}
+        <div className="flex-1 overflow-y-auto px-4 py-2">
           <p className="text-xs font-medium text-black-500 uppercase tracking-wider mb-2">
             Apps ({filteredApps.length})
           </p>
-        )}
-        <nav className="space-y-1">
-          {filteredApps.map(app => (
-            <NavLink
-              key={app.id}
-              to={app.route}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-200
-                ${isActive 
-                  ? 'bg-802/15 text-802 border border-802/30' 
-                  : 'text-black-400 hover:text-black-200 hover:bg-black-800'
+          <nav className="space-y-1">
+            {filteredApps.map(app => (
+              <NavLink
+                key={app.id}
+                to={app.route}
+                onClick={handleNavClick}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-200
+                  ${isActive 
+                    ? 'bg-802/15 text-802 border border-802/30' 
+                    : 'text-black-400 hover:text-black-200 hover:bg-black-800'
+                  }`
                 }
-                ${sidebarCollapsed ? 'justify-center' : ''}
-                `
-              }
-              title={sidebarCollapsed ? app.name : undefined}
-            >
-              <span className="flex-shrink-0 w-5 h-5">{app.icon}</span>
-              {!sidebarCollapsed && (
+              >
+                <span className="flex-shrink-0 w-5 h-5">{app.icon}</span>
                 <span className="truncate">{app.name}</span>
-              )}
-            </NavLink>
-          ))}
-        </nav>
-      </div>
+              </NavLink>
+            ))}
+          </nav>
+        </div>
 
-      {/* Collapse Toggle */}
-      <div className="border-t border-black-700 p-4">
-        <button
-          onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-          className="w-full flex items-center justify-center p-2 rounded-lg text-black-500 hover:text-black-200 hover:bg-black-800 transition-colors"
-        >
-          {sidebarCollapsed ? (
-            <ChevronRight className="w-4 h-4" />
-          ) : (
-            <ChevronLeft className="w-4 h-4" />
-          )}
-        </button>
-      </div>
-    </aside>
+        {/* Footer - only visible on mobile */}
+        <div className="border-t border-black-700 p-4 lg:hidden">
+          <button
+            onClick={onClose}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm text-black-400 hover:text-black-200 hover:bg-black-800 transition-colors"
+          >
+            <Grid3X3 className="w-4 h-4" />
+            Close
+          </button>
+        </div>
+      </aside>
+    </>
   );
 };
