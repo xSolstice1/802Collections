@@ -3,7 +3,8 @@ import {
   LayoutDashboard, 
   FileJson,
   Utensils,
-  Sparkles
+  Sparkles,
+  FileText
 } from 'lucide-react';
 import { appRegistry } from '@core/registry/appRegistry';
 import type { AppDefinition } from '@model/index';
@@ -23,6 +24,7 @@ const HomeApp = lazy(() => import('@apps/home/HomeApp'));
 const JsonFormatterApp = lazy(() => import('@apps/json-formatter/JsonFormatterApp'));
 const WheelOfLunchApp = lazy(() => import('@apps/wheel-of-lunch/WheelOfLunchApp'));
 const StickerMakerApp = lazy(() => import('@apps/sticker-maker/StickerMakerApp'));
+const ResumeBuilderApp = lazy(() => import('@apps/resume-builder/ResumeBuilderApp'));
 
 /**
  * Available Applications
@@ -77,6 +79,16 @@ const apps: AppDefinition[] = [
     component: StickerMakerApp,
     enabled: true,
     category: 'media',
+  },
+  {
+    id: 'resume-builder',
+    name: 'Resume Builder',
+    description: 'Create ATS-friendly resumes with multiple templates',
+    route: '/resume-builder',
+    icon: <FileText className="w-5 h-5" />,
+    component: ResumeBuilderApp,
+    enabled: true,
+    category: 'productivity',
   },
 ];
 
