@@ -31,6 +31,9 @@ import {
   generateId,
   createEmptyResume,
   AVAILABLE_TEMPLATES,
+  AVAILABLE_FONTS,
+  AVAILABLE_COLOR_ACCENTS,
+  type FontFamily,
 } from './types/resume';
 import {
   exportToPDF,
@@ -51,6 +54,8 @@ const ResumeBuilderApp = () => {
   // State
   const [resume, setResume] = useState<ResumeData>(createEmptyResume);
   const [selectedTemplate, setSelectedTemplate] = useState<TemplateId>('modern');
+  const [selectedFont, setSelectedFont] = useState<FontFamily>('sans-serif');
+  const [selectedAccent, setSelectedAccent] = useState<string>('green');
   const [activeSection, setActiveSection] = useState<ActiveSection>('contact');
   const [exportFormat, setExportFormat] = useState<ExportFormat>('pdf');
   const [isExporting, setIsExporting] = useState(false);
@@ -75,6 +80,14 @@ const ResumeBuilderApp = () => {
     if (savedTemplate) {
       setSelectedTemplate(savedTemplate as TemplateId);
     }
+    const savedFont = localStorage.getItem('resume-font');
+    if (savedFont) {
+      setSelectedFont(savedFont as FontFamily);
+    }
+    const savedAccent = localStorage.getItem('resume-accent');
+    if (savedAccent) {
+      setSelectedAccent(savedAccent);
+    }
   }, []);
 
   // Save to localStorage on change
@@ -85,6 +98,14 @@ const ResumeBuilderApp = () => {
   useEffect(() => {
     localStorage.setItem('resume-template', selectedTemplate);
   }, [selectedTemplate]);
+
+  useEffect(() => {
+    localStorage.setItem('resume-font', selectedFont);
+  }, [selectedFont]);
+
+  useEffect(() => {
+    localStorage.setItem('resume-accent', selectedAccent);
+  }, [selectedAccent]);
 
   // Contact info handlers
   const updateContact = useCallback((field: keyof ContactInfo, value: string) => {
@@ -439,6 +460,37 @@ const ResumeBuilderApp = () => {
           </select>
         </div>
 
+        {/* Font Selector */}
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-dark-400">Font:</span>
+          <select
+            value={selectedFont}
+            onChange={(e) => setSelectedFont(e.target.value as FontFamily)}
+            className="input w-auto text-sm"
+          >
+            {AVAILABLE_FONTS.map(f => (
+              <option key={f.id} value={f.id}>{f.name}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Color Accent Selector */}
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-dark-400">Accent:</span>
+          <div className="flex gap-1">
+            {AVAILABLE_COLOR_ACCENTS.map(accent => (
+              <button
+                key={accent.id}
+                onClick={() => setSelectedAccent(accent.id)}
+                className={`w-6 h-6 rounded-full border-2 transition-all ${
+                  selectedAccent === accent.id ? 'border-dark-900 scale-110' : 'border-transparent hover:scale-105'
+                }`}
+                style={{ backgroundColor: accent.color }}
+                title={accent.name}
+              />
+            ))}
+          </div>
+        </div>
 
         {/* Export Format */}
         <div className="flex items-center gap-2 ml-auto">
@@ -1062,11 +1114,16 @@ const ResumeBuilderApp = () => {
                 width: '8.5in',
                 minHeight: '11in',
                 padding: '0.75in',
-                fontFamily: "'Segoe UI', 'Helvetica Neue', Arial, sans-serif",
+                fontFamily: AVAILABLE_FONTS.find(f => f.id === selectedFont)?.cssValue || "'Segoe UI', 'Helvetica Neue', Arial, sans-serif",
                 transformOrigin: 'top center',
               }}
             >
-              <ResumePreview resume={resume} template={selectedTemplate} />
+              <ResumePreview 
+                resume={resume} 
+                template={selectedTemplate} 
+                font={selectedFont}
+                accentColor={selectedAccent}
+              />
             </div>
           </div>
         </div>
@@ -1079,8 +1136,25 @@ const ResumeBuilderApp = () => {
  * Resume Preview Component
  * Renders the resume based on selected template with improved styling
  */
-const ResumePreview = ({ resume, template }: { resume: ResumeData; template: TemplateId }) => {
+const ResumePreview = ({ 
+  resume, 
+  template, 
+  font, 
+  accentColor 
+}: { 
+  resume: ResumeData; 
+  template: TemplateId; 
+  font: FontFamily;
+  accentColor: string;
+}) => {
   const { contact, experience, education, certifications, awards, skills } = resume;
+
+  // Get font CSS value
+  const fontCSS = AVAILABLE_FONTS.find(f => f.id === font)?.cssValue || "'Segoe UI', 'Helvetica Neue', Arial, sans-serif";
+  
+  // Get accent color value
+  const accent = AVAILABLE_COLOR_ACCENTS.find(a => a.id === accentColor);
+  const accentHex = accent?.color || '#44D62C';
 
   // Improved common styles for all templates
   const styles = {
@@ -1088,7 +1162,7 @@ const ResumePreview = ({ resume, template }: { resume: ResumeData; template: Tem
       fontSize: '15px',
       fontWeight: '700',
       color: '#1a1a1a',
-      borderBottom: '2px solid #44D62C',
+      borderBottom: `2px solid ${accentHex}`,
       paddingBottom: '6px',
       marginTop: '20px',
       marginBottom: '10px',
@@ -1114,15 +1188,15 @@ const ResumePreview = ({ resume, template }: { resume: ResumeData; template: Tem
 
   if (template === 'modern') {
     return (
-      <div style={{ display: 'flex', gap: '24px', fontFamily: "'Segoe UI', 'Helvetica Neue', Arial, sans-serif" }}>
+      <div style={{ display: 'flex', gap: '24px', fontFamily: fontCSS }}>
         {/* Main Content */}
         <div style={{ flex: '2.2' }}>
           {/* Header */}
-          <div style={{ marginBottom: '20px', textAlign: 'center' as const, paddingBottom: '16px', borderBottom: '2px solid #44D62C' }}>
+          <div style={{ marginBottom: '20px', textAlign: 'center' as const, paddingBottom: '16px', borderBottom: `2px solid ${accentHex}` }}>
             <h1 style={{ fontSize: '26px', fontWeight: '800', color: '#1a1a1a', margin: '0 0 6px 0', letterSpacing: '-0.5px' }}>
               {contact.fullName || 'Your Name'}
             </h1>
-            <p style={{ fontSize: '13px', color: '#44D62C', margin: '0 0 8px 0', fontWeight: '600' }}>{contact.title}</p>
+            <p style={{ fontSize: '13px', color: accentHex, margin: '0 0 8px 0', fontWeight: '600' }}>{contact.title}</p>
             <p style={{ fontSize: '10px', color: '#888', margin: 0, lineHeight: '1.6' }}>
               {[contact.email, contact.phone, contact.location].filter(Boolean).join(' | ')}
             </p>
@@ -1151,7 +1225,7 @@ const ResumePreview = ({ resume, template }: { resume: ResumeData; template: Tem
                     <span style={styles.subheading}>{exp.position}</span>
                     <span style={styles.date}>{exp.startDate}{exp.current ? ' – Present' : exp.endDate ? ` – ${exp.endDate}` : ''}</span>
                   </div>
-                  <p style={{ fontSize: '12px', color: '#44D62C', margin: '2px 0 4px 0', fontWeight: '600' }}>
+                  <p style={{ fontSize: '12px', color: accentHex, margin: '2px 0 4px 0', fontWeight: '600' }}>
                     {exp.company}{exp.location && ` — ${exp.location}`}
                   </p>
                   {exp.description && <p style={styles.text}>{exp.description}</p>}
@@ -1194,7 +1268,7 @@ const ResumePreview = ({ resume, template }: { resume: ResumeData; template: Tem
               <h2 style={styles.heading}>Skills</h2>
               {skills.map((cat) => (
                 <div key={cat.id} style={{ marginBottom: '12px' }}>
-                  <p style={{ ...styles.subheading, fontSize: '11px', marginBottom: '4px', color: '#44D62C' }}>{cat.name}</p>
+                  <p style={{ ...styles.subheading, fontSize: '11px', marginBottom: '4px', color: accentHex }}>{cat.name}</p>
                   <p style={styles.text}>{cat.skills.filter(Boolean).join(', ')}</p>
                 </div>
               ))}
@@ -1233,13 +1307,13 @@ const ResumePreview = ({ resume, template }: { resume: ResumeData; template: Tem
 
   // Classic, Minimal, Professional templates (single column)
   return (
-    <div style={{ fontFamily: "'Segoe UI', 'Helvetica Neue', Arial, sans-serif", maxWidth: '6.5in', margin: '0 auto' }}>
+    <div style={{ fontFamily: fontCSS, maxWidth: '6.5in', margin: '0 auto' }}>
       {/* Header */}
-      <div style={{ textAlign: 'center', marginBottom: '20px', paddingBottom: '16px', borderBottom: '2px solid #44D62C' }}>
+      <div style={{ textAlign: 'center', marginBottom: '20px', paddingBottom: '16px', borderBottom: `2px solid ${accentHex}` }}>
         <h1 style={{ fontSize: '24px', fontWeight: '800', color: '#1a1a1a', margin: '0 0 6px 0', letterSpacing: '-0.5px' }}>
           {contact.fullName || 'Your Name'}
         </h1>
-        <p style={{ fontSize: '13px', color: '#44D62C', margin: '0 0 8px 0', fontWeight: '600' }}>{contact.title}</p>
+        <p style={{ fontSize: '13px', color: accentHex, margin: '0 0 8px 0', fontWeight: '600' }}>{contact.title}</p>
         <p style={{ fontSize: '10px', color: '#888', margin: 0, lineHeight: '1.6' }}>
           {[contact.email, contact.phone, contact.location].filter(Boolean).join(' | ')}
         </p>
@@ -1268,7 +1342,7 @@ const ResumePreview = ({ resume, template }: { resume: ResumeData; template: Tem
                 <span style={styles.subheading}>{exp.position}</span>
                 <span style={styles.date}>{exp.startDate}{exp.current ? ' – Present' : exp.endDate ? ` – ${exp.endDate}` : ''}</span>
               </div>
-              <p style={{ fontSize: '12px', color: '#44D62C', margin: '2px 0 4px 0', fontWeight: '600' }}>
+              <p style={{ fontSize: '12px', color: accentHex, margin: '2px 0 4px 0', fontWeight: '600' }}>
                 {exp.company}{exp.location && ` — ${exp.location}`}
               </p>
               {exp.description && <p style={styles.text}>{exp.description}</p>}
@@ -1308,7 +1382,7 @@ const ResumePreview = ({ resume, template }: { resume: ResumeData; template: Tem
           <h2 style={styles.heading}>Skills</h2>
           {skills.map((cat) => (
             <div key={cat.id} style={{ marginBottom: '8px' }}>
-              <p style={{ ...styles.text, fontWeight: '700', color: '#44D62C', fontSize: '11px' }}>{cat.name}:</p>
+              <p style={{ ...styles.text, fontWeight: '700', color: accentHex, fontSize: '11px' }}>{cat.name}:</p>
               <p style={styles.text}>{cat.skills.filter(Boolean).join(', ')}</p>
             </div>
           ))}

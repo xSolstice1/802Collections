@@ -94,6 +94,45 @@ export interface Template {
 /** Export Format */
 export type ExportFormat = 'pdf' | 'docx';
 
+/** Font Options */
+export type FontFamily = 'sans-serif' | 'serif' | 'monospace' | 'georgia' | 'times' | 'courier';
+
+export interface FontOption {
+  id: FontFamily;
+  name: string;
+  cssValue: string;
+}
+
+/** Color Accent Options */
+export interface ColorAccent {
+  id: string;
+  name: string;
+  color: string;
+  lightColor: string;
+}
+
+/** Available Fonts */
+export const AVAILABLE_FONTS: FontOption[] = [
+  { id: 'sans-serif', name: 'Sans-serif', cssValue: "'Segoe UI', 'Helvetica Neue', Arial, sans-serif" },
+  { id: 'serif', name: 'Serif', cssValue: "Georgia, 'Times New Roman', Times, serif" },
+  { id: 'monospace', name: 'Monospace', cssValue: "'Courier New', Courier, monospace" },
+  { id: 'georgia', name: 'Georgia', cssValue: "Georgia, 'Times New Roman', Times, serif" },
+  { id: 'times', name: 'Times New Roman', cssValue: "'Times New Roman', Times, serif" },
+  { id: 'courier', name: 'Courier', cssValue: "'Courier New', Courier, monospace" },
+];
+
+/** Available Color Accents */
+export const AVAILABLE_COLOR_ACCENTS: ColorAccent[] = [
+  { id: 'green', name: 'Green', color: '#44D62C', lightColor: '#44D62C' },
+  { id: 'blue', name: 'Blue', color: '#2563EB', lightColor: '#3B82F6' },
+  { id: 'purple', name: 'Purple', color: '#7C3AED', lightColor: '#8B5CF6' },
+  { id: 'red', name: 'Red', color: '#DC2626', lightColor: '#EF4444' },
+  { id: 'orange', name: 'Orange', color: '#EA580C', lightColor: '#F97316' },
+  { id: 'teal', name: 'Teal', color: '#0D9488', lightColor: '#14B8A6' },
+  { id: 'pink', name: 'Pink', color: '#DB2777', lightColor: '#EC4899' },
+  { id: 'slate', name: 'Slate', color: '#475569', lightColor: '#64748B' },
+];
+
 /** Generate unique ID */
 export const generateId = (): string => {
   return Math.random().toString(36).substring(2, 11);
