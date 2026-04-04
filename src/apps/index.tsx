@@ -2,7 +2,8 @@ import { lazy } from 'react';
 import { 
   LayoutDashboard, 
   FileJson,
-  Utensils
+  Utensils,
+  Sparkles
 } from 'lucide-react';
 import { appRegistry } from '@core/registry/appRegistry';
 import type { AppDefinition } from '@model/index';
@@ -21,6 +22,7 @@ import type { AppDefinition } from '@model/index';
 const HomeApp = lazy(() => import('@apps/home/HomeApp'));
 const JsonFormatterApp = lazy(() => import('@apps/json-formatter/JsonFormatterApp'));
 const WheelOfLunchApp = lazy(() => import('@apps/wheel-of-lunch/WheelOfLunchApp'));
+const StickerMakerApp = lazy(() => import('@apps/sticker-maker/StickerMakerApp'));
 
 /**
  * Available Applications
@@ -65,6 +67,16 @@ const apps: AppDefinition[] = [
     component: WheelOfLunchApp,
     enabled: true,
     category: 'utilities',
+  },
+  {
+    id: 'sticker-maker',
+    name: 'Telegram Sticker Maker',
+    description: 'Create perfect Telegram stickers from any image',
+    route: '/sticker-maker',
+    icon: <Sparkles className="w-5 h-5" />,
+    component: StickerMakerApp,
+    enabled: true,
+    category: 'media',
   },
 ];
 

@@ -55,9 +55,11 @@ npm run preview
 │   ├── apps/              # Application modules
 │   │   ├── home/          # Dashboard/Home app
 │   │   ├── json-formatter/# JSON Formatter utility
+│   │   ├── sticker-maker/ # Telegram Sticker Maker
+│   │   ├── wheel-of-lunch/# Wheel of Lunch decision maker
 │   │   └── index.ts       # App registry configuration
 │   ├── components/        # Reusable UI components
-│   │   ├── layout/        # Layout components (Sidebar, Header)
+│   │   ├── layout/        # Layout components (Sidebar, Header, MainLayout)
 │   │   ├── ErrorBoundary.tsx
 │   │   └── LoadingSpinner.tsx
 │   ├── core/              # Core framework code
@@ -65,6 +67,9 @@ npm run preview
 │   │   └── router/        # Routing configuration
 │   ├── hooks/             # Custom React hooks
 │   ├── services/          # API and external services
+│   │   ├── api.ts         # Main API service
+│   │   ├── backgroundRemovalService.ts # AI background removal
+│   │   └── stickerService.ts # Sticker processing
 │   ├── store/             # Zustand state management
 │   ├── styles/            # Global styles and Tailwind config
 │   ├── model/             # TypeScript type definitions and models
@@ -163,6 +168,42 @@ That's it! Your app will automatically appear in the sidebar and dashboard.
 | Zustand | State management |
 | Tailwind CSS | Styling |
 | Lucide React | Icons |
+
+## 🎯 Available Apps
+
+### Home Dashboard
+The main landing page that provides an overview of all available applications in the 802Collections platform. Features quick access to all tools and displays the platform's capabilities.
+
+### JSON Formatter
+A utility for formatting, validating, and beautifying JSON data. Supports syntax highlighting and error detection for JSON parsing.
+
+### Telegram Sticker Maker
+A comprehensive tool for creating Telegram-compliant stickers with AI-powered background removal.
+
+**Features:**
+- Upload any image (JPG, PNG, WEBP up to 10MB)
+- AI-powered background removal (client-side using imgly/background-removal-js)
+- Apply Telegram-style white stroke and shadow
+- Resize to 512x512 compliant format
+- Download as PNG or WEBP
+
+**Technical Details:**
+- Background removal uses ONNX Runtime Web with a machine learning model
+- First use downloads and caches the AI model (~24MB WASM file)
+- Subsequent uses are faster as the model is cached in the browser
+- Final stickers are always 512x512 pixels (Telegram requirement)
+- One side is exactly 512px, the other is ≤ 512px (maintaining aspect ratio)
+
+**Note:** The first background removal may take longer as the AI model is downloaded and cached in the browser.
+
+### Wheel of Lunch
+A fun decision-making tool that randomly selects a lunch option from your predefined list. Perfect for when you can't decide where to eat!
+
+**Features:**
+- Add, edit, and remove lunch options
+- Spin the wheel to randomly select an option
+- Customizable options list
+- Fun animations and visual feedback
 
 ## 📦 Available Scripts
 
