@@ -23,7 +23,7 @@ import {
   removeBackground,
 } from '@services/backgroundRemovalService';
 
-type ProcessingStep = 'idle' | 'uploading' | 'removing-bg' | 'processing' | 'complete' | 'error';
+type ProcessingStep = 'idle' | 'uploaded' | 'removing-bg' | 'processing' | 'complete' | 'error';
 
 interface PreviewState {
   original: string | null;
@@ -58,7 +58,11 @@ const StickerMakerApp = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
 
-  // Handle file selection
+  // Store the original file and data URL for processing
+  const originalFileRef = useRef<File | null>(null);
+  const originalDataUrlRef = useRef<string | null>(null);
+
+  // Handle file selection - just load preview
   const handleFileSelect = useCallback(async (file: File) => {
     setError(null);
     
@@ -69,13 +73,15 @@ const StickerMakerApp = () => {
       return;
     }
 
-    setProcessingStep('uploading');
-
     try {
       // Read and preview original image
       const reader = new FileReader();
       reader.onload = async (e) => {
         const originalDataUrl = e.target?.result as string;
+        
+        // Store for later processing
+        originalFileRef.current = file;
+        originalDataUrlRef.current = originalDataUrl;
         
         // Create thumbnail for preview
         const thumbnail = await createThumbnail(originalDataUrl, 200);
@@ -83,51 +89,13 @@ const StickerMakerApp = () => {
         setPreviews(prev => ({
           ...prev,
           original: thumbnail || originalDataUrl,
+          backgroundRemoved: null,
+          finalSticker: null,
+          fullResSticker: null,
         }));
 
-        setProcessingStep('removing-bg');
-
-        // Remove background
-        const bgRemovalResult = await removeBackground(file);
-        
-        if (!bgRemovalResult.success) {
-          setError(bgRemovalResult.error || 'Failed to remove background');
-          setProcessingStep('error');
-          return;
-        }
-
-        const bgRemovedThumbnail = await createThumbnail(bgRemovalResult.dataUrl!, 200);
-        
-        setPreviews(prev => ({
-          ...prev,
-          backgroundRemoved: bgRemovedThumbnail || bgRemovalResult.dataUrl!,
-        }));
-
-        // If user wants to see the result before processing, we could stop here
-        // For now, auto-process to final sticker
-        setProcessingStep('processing');
-
-        // Process final sticker
-        const stickerResult = await processSticker(
-          bgRemovalResult.dataUrl!,
-          options
-        );
-
-        if (!stickerResult.success) {
-          setError(stickerResult.error || 'Failed to process sticker');
-          setProcessingStep('error');
-          return;
-        }
-
-        const stickerThumbnail = await createThumbnail(stickerResult.dataUrl!, 200);
-
-        setPreviews(prev => ({
-          ...prev,
-          finalSticker: stickerThumbnail,
-          fullResSticker: stickerResult.dataUrl!,
-        }));
-
-        setProcessingStep('complete');
+        // Set to uploaded state - waiting for user to press process
+        setProcessingStep('uploaded');
       };
 
       reader.onerror = () => {
@@ -136,6 +104,59 @@ const StickerMakerApp = () => {
       };
 
       reader.readAsDataURL(file);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred');
+      setProcessingStep('error');
+    }
+  }, []);
+
+  // Process the sticker (called when user clicks "Process")
+  const handleProcess = useCallback(async () => {
+    if (!originalFileRef.current || !originalDataUrlRef.current) return;
+
+    setProcessingStep('removing-bg');
+    setError(null);
+
+    try {
+      // Remove background
+      const bgRemovalResult = await removeBackground(originalFileRef.current);
+      
+      if (!bgRemovalResult.success) {
+        setError(bgRemovalResult.error || 'Failed to remove background');
+        setProcessingStep('error');
+        return;
+      }
+
+      const bgRemovedThumbnail = await createThumbnail(bgRemovalResult.dataUrl!, 200);
+      
+      setPreviews(prev => ({
+        ...prev,
+        backgroundRemoved: bgRemovedThumbnail || bgRemovalResult.dataUrl!,
+      }));
+
+      // Process final sticker
+      setProcessingStep('processing');
+
+      const stickerResult = await processSticker(
+        bgRemovalResult.dataUrl!,
+        options
+      );
+
+      if (!stickerResult.success) {
+        setError(stickerResult.error || 'Failed to process sticker');
+        setProcessingStep('error');
+        return;
+      }
+
+      const stickerThumbnail = await createThumbnail(stickerResult.dataUrl!, 200);
+
+      setPreviews(prev => ({
+        ...prev,
+        finalSticker: stickerThumbnail,
+        fullResSticker: stickerResult.dataUrl!,
+      }));
+
+      setProcessingStep('complete');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred');
       setProcessingStep('error');
@@ -206,6 +227,24 @@ const StickerMakerApp = () => {
     }
   }, [previews.backgroundRemoved, options]);
 
+  // Get status message
+  const getStatusMessage = (): string => {
+    switch (processingStep) {
+      case 'uploaded':
+        return 'Ready to process';
+      case 'removing-bg':
+        return 'Removing background...';
+      case 'processing':
+        return 'Applying sticker effects...';
+      case 'complete':
+        return 'Sticker ready!';
+      case 'error':
+        return 'Error occurred';
+      default:
+        return '';
+    }
+  };
+
   // Download sticker
   const handleDownload = useCallback(() => {
     if (!previews.fullResSticker) return;
@@ -226,23 +265,6 @@ const StickerMakerApp = () => {
     });
   }, []);
 
-  // Get status message
-  const getStatusMessage = (): string => {
-    switch (processingStep) {
-      case 'uploading':
-        return 'Uploading image...';
-      case 'removing-bg':
-        return 'Removing background...';
-      case 'processing':
-        return 'Applying sticker effects...';
-      case 'complete':
-        return 'Sticker ready!';
-      case 'error':
-        return 'Error occurred';
-      default:
-        return '';
-    }
-  };
 
   return (
     <div className="space-y-6">
@@ -387,6 +409,18 @@ const StickerMakerApp = () => {
           </div>
 
           {/* Action Buttons */}
+          {processingStep === 'uploaded' && (
+            <div className="flex gap-3">
+              <button onClick={handleProcess} className="btn-primary flex-1 flex items-center justify-center gap-2">
+                <Sparkles className="w-4 h-4" />
+                Process Sticker
+              </button>
+              <button onClick={handleReset} className="btn-ghost flex items-center justify-center gap-2">
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
           {processingStep === 'complete' && (
             <div className="flex gap-3">
               <button onClick={handleDownload} className="btn-primary flex-1 flex items-center justify-center gap-2">
