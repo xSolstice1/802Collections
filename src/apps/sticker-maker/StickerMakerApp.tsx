@@ -370,23 +370,23 @@ const StickerMakerApp = () => {
                 {/* Output Format */}
                 <div className="space-y-2">
                   <label className="text-sm text-dark-400">Output Format</label>
-                  <div className="flex bg-dark-800 rounded-lg p-1">
+                  <div className="flex gap-2">
                     <button
                       onClick={() => setOptions(prev => ({ ...prev, outputFormat: 'png' }))}
-                      className={`flex-1 px-3 py-1.5 text-sm rounded-md transition-colors ${
+                      className={`flex-1 px-3 py-2 text-sm rounded-lg font-medium transition-colors ${
                         options.outputFormat === 'png'
-                          ? 'bg-802 text-dark-950'
-                          : 'text-dark-400 hover:text-dark-200'
+                          ? 'btn-primary'
+                          : 'btn-secondary text-dark-200'
                       }`}
                     >
                       PNG
                     </button>
                     <button
                       onClick={() => setOptions(prev => ({ ...prev, outputFormat: 'webp' }))}
-                      className={`flex-1 px-3 py-1.5 text-sm rounded-md transition-colors ${
+                      className={`flex-1 px-3 py-2 text-sm rounded-lg font-medium transition-colors ${
                         options.outputFormat === 'webp'
-                          ? 'bg-802 text-dark-950'
-                          : 'text-dark-400 hover:text-dark-200'
+                          ? 'btn-primary'
+                          : 'btn-secondary text-dark-200'
                       }`}
                     >
                       WEBP
@@ -409,11 +409,26 @@ const StickerMakerApp = () => {
           </div>
 
           {/* Action Buttons */}
-          {processingStep === 'uploaded' && (
+          {(processingStep === 'uploaded' || processingStep === 'removing-bg' || processingStep === 'processing') && (
             <div className="flex gap-3">
-              <button onClick={handleProcess} className="btn-primary flex-1 flex items-center justify-center gap-2">
-                <Sparkles className="w-4 h-4" />
-                Process Sticker
+              <button 
+                onClick={handleProcess} 
+                disabled={processingStep !== 'uploaded'}
+                className={`flex-1 flex items-center justify-center gap-2 btn-primary ${
+                  processingStep !== 'uploaded' ? 'opacity-50 cursor-not-allowed' : ''
+                }`}
+              >
+                {processingStep !== 'uploaded' ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4" />
+                    Process Sticker
+                  </>
+                )}
               </button>
               <button onClick={handleReset} className="btn-ghost flex items-center justify-center gap-2">
                 <Trash2 className="w-4 h-4" />
@@ -434,9 +449,14 @@ const StickerMakerApp = () => {
           )}
 
           {processingStep === 'error' && (
-            <button onClick={handleReset} className="btn-primary w-full">
-              Try Again
-            </button>
+            <div className="flex gap-3">
+              <button onClick={handleReset} className="btn-primary flex-1">
+                Try Again
+              </button>
+              <button onClick={handleReset} className="btn-ghost flex items-center justify-center gap-2">
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
           )}
         </div>
 
