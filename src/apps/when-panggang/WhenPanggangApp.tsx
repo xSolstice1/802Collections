@@ -5,8 +5,8 @@ const SLOT_DURATION = 3000;
 const SLOT_INTERVAL = 50;
 
 const WhenPanggangApp = () => {
-  const [startTime, setStartTime] = useState('17:00');
-  const [endTime, setEndTime] = useState('19:00');
+  const [startTime, setStartTime] = useState('16:00');
+  const [endTime, setEndTime] = useState('18:00');
   const [result, setResult] = useState<string | null>(null);
   const [isSpinning, setIsSpinning] = useState(false);
   const [displayDigits, setDisplayDigits] = useState(['--', '--']);
@@ -53,6 +53,7 @@ const WhenPanggangApp = () => {
 
     setIsSpinning(true);
     setShowFireworks(false);
+    setShowPanggangText(false);
     setResult(null);
 
     const randomMins = startMins + Math.floor(Math.random() * (endMins - startMins + 1));
