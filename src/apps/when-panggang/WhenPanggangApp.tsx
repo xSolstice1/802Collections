@@ -12,6 +12,7 @@ const WhenPanggangApp = () => {
   const [displayDigits, setDisplayDigits] = useState(['--', '--']);
   const [showFireworks, setShowFireworks] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showPanggangText, setShowPanggangText] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -83,6 +84,7 @@ const WhenPanggangApp = () => {
           setIsSpinning(false);
           setResult(finalTime);
           setShowFireworks(true);
+          setShowPanggangText(true);
         }, 200);
       }
     }, SLOT_INTERVAL);
@@ -95,6 +97,7 @@ const WhenPanggangApp = () => {
     setIsSpinning(false);
     setDisplayDigits(['--', '--']);
     setShowFireworks(false);
+    setShowPanggangText(false);
     setError(null);
   };
 
@@ -207,8 +210,16 @@ const WhenPanggangApp = () => {
 
           {result && (
             <p className="mt-4 text-lg text-gray-300 animate-fadeIn">
-              That's <span className="text-802 font-semibold">{formatDisplayTime(result)}</span> — time to panggang!
+              That's <span className="text-802 font-semibold">{formatDisplayTime(result)}</span>
             </p>
+          )}
+
+          {showPanggangText && (
+            <div className="mt-6 panggang-banner">
+              <span className="panggang-text text-4xl sm:text-5xl font-black tracking-tight">
+                PANGGANG LO!
+              </span>
+            </div>
           )}
         </div>
       </div>
@@ -268,6 +279,43 @@ const WhenPanggangApp = () => {
         }
         .animate-fadeIn {
           animation: fadeIn 0.5s ease-out both;
+        }
+        .panggang-banner {
+          animation: panggangSlam 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+        }
+        .panggang-text {
+          background: linear-gradient(135deg, #44D62C, #6ae04a, #fff, #6ae04a, #44D62C);
+          background-size: 300% 300%;
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
+          animation: panggangShimmer 2s ease-in-out infinite;
+          filter: drop-shadow(0 0 20px rgba(68, 214, 44, 0.6)) drop-shadow(0 0 40px rgba(68, 214, 44, 0.3));
+        }
+        @keyframes panggangSlam {
+          0% {
+            transform: scale(3) rotate(-5deg);
+            opacity: 0;
+          }
+          60% {
+            transform: scale(0.9) rotate(1deg);
+            opacity: 1;
+          }
+          80% {
+            transform: scale(1.05) rotate(-0.5deg);
+          }
+          100% {
+            transform: scale(1) rotate(0deg);
+            opacity: 1;
+          }
+        }
+        @keyframes panggangShimmer {
+          0%, 100% {
+            background-position: 0% 50%;
+          }
+          50% {
+            background-position: 100% 50%;
+          }
         }
       `}</style>
     </div>
