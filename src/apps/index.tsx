@@ -6,7 +6,8 @@ import {
   Sparkles,
   FileText,
   Flame,
-  Bird
+  Bird,
+  DollarSign
 } from 'lucide-react';
 import { appRegistry } from '@core/registry/appRegistry';
 import type { AppDefinition } from '@model/index';
@@ -29,6 +30,7 @@ const StickerMakerApp = lazy(() => import('@apps/sticker-maker/StickerMakerApp')
 const ResumeBuilderApp = lazy(() => import('@apps/resume-builder/ResumeBuilderApp'));
 const WhenPanggangApp = lazy(() => import('@apps/when-panggang/WhenPanggangApp'));
 const BirdShitApp = lazy(() => import('@apps/bird-shit/BirdShitApp'));
+const PaydayCountdownApp = lazy(() => import('@apps/payday-countdown/PaydayCountdownApp'));
 
 /**
  * Available Applications
@@ -113,6 +115,16 @@ const apps: AppDefinition[] = [
     component: BirdShitApp,
     enabled: true,
     category: 'games',
+  },
+  {
+    id: 'payday-countdown',
+    name: 'Payday Countdown',
+    description: 'Countdown to the next payday on the 27th',
+    route: '/payday-countdown',
+    icon: <DollarSign className="w-5 h-5" />,
+    component: PaydayCountdownApp,
+    enabled: true,
+    category: 'utilities',
   },
 ];
 
