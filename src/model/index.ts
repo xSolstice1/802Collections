@@ -43,6 +43,7 @@ export type AppCategory =
   | 'development' 
   | 'media' 
   | 'productivity'
+  | 'games'
   | 'settings'
   | 'other';
 
