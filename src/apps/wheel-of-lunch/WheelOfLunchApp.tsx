@@ -290,10 +290,18 @@ const WheelOfLunchApp = () => {
       setWinner(winnerOption.name);
       setSpinning(false);
 
-      // Play celebration sound
+      // Play celebration sound, then announce winner
       playCelebrationSound();
+      if (!muted && 'speechSynthesis' in window) {
+        setTimeout(() => {
+          const utterance = new SpeechSynthesisUtterance(`Today we eat ${winnerOption.name}`);
+          utterance.rate = 1;
+          utterance.pitch = 1.1;
+          window.speechSynthesis.speak(utterance);
+        }, 600);
+      }
     }, 4000);
-  }, [spinning, options, rotation, totalWeight, playCelebrationSound, playClickSound]);
+  }, [spinning, options, rotation, totalWeight, muted, playCelebrationSound, playClickSound]);
 
   // Add new option
   const addOption = () => {
