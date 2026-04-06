@@ -1,10 +1,11 @@
 import { lazy } from 'react';
-import { 
-  LayoutDashboard, 
+import {
+  LayoutDashboard,
   FileJson,
   Utensils,
   Sparkles,
-  FileText
+  FileText,
+  Flame
 } from 'lucide-react';
 import { appRegistry } from '@core/registry/appRegistry';
 import type { AppDefinition } from '@model/index';
@@ -25,6 +26,7 @@ const JsonFormatterApp = lazy(() => import('@apps/json-formatter/JsonFormatterAp
 const WheelOfLunchApp = lazy(() => import('@apps/wheel-of-lunch/WheelOfLunchApp'));
 const StickerMakerApp = lazy(() => import('@apps/sticker-maker/StickerMakerApp'));
 const ResumeBuilderApp = lazy(() => import('@apps/resume-builder/ResumeBuilderApp'));
+const WhenPanggangApp = lazy(() => import('@apps/when-panggang/WhenPanggangApp'));
 
 /**
  * Available Applications
@@ -89,6 +91,16 @@ const apps: AppDefinition[] = [
     component: ResumeBuilderApp,
     enabled: true,
     category: 'productivity',
+  },
+  {
+    id: 'when-panggang',
+    name: 'When Panggang?',
+    description: 'Find out when you can finally leave the office',
+    route: '/when-panggang',
+    icon: <Flame className="w-5 h-5" />,
+    component: WhenPanggangApp,
+    enabled: true,
+    category: 'utilities',
   },
 ];
 
