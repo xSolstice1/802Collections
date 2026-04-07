@@ -2,8 +2,10 @@ import { NavLink } from 'react-router-dom';
 import { 
   X,
   Grid3X3,
-  Box
+  Box,
+  Github
 } from 'lucide-react';
+import { PaydayCountdownWidget } from '@components/widgets/PaydayCountdownWidget';
 import type { AppDefinition } from '@model/index';
 
 interface SidebarProps {
@@ -17,9 +19,9 @@ interface SidebarProps {
  * 
  * Responsive navigation sidebar with app launcher functionality.
  * Collapsed by default on mobile, expanded on desktop.
+ * Includes the expanded payday countdown widget and GitHub link in footer.
  */
 export const Sidebar = ({ apps, isOpen, onClose }: SidebarProps) => {
-  // Filter apps based on search (could add search later)
   const filteredApps = apps.filter(app => app.enabled);
 
   // Close sidebar when navigating (for mobile)
@@ -36,6 +38,7 @@ export const Sidebar = ({ apps, isOpen, onClose }: SidebarProps) => {
         <div 
           className="fixed inset-0 bg-black/50 z-40 lg:hidden"
           onClick={onClose}
+          aria-hidden="true"
         />
       )}
 
@@ -45,7 +48,7 @@ export const Sidebar = ({ apps, isOpen, onClose }: SidebarProps) => {
           fixed lg:static inset-y-0 left-0 z-50
           flex flex-col bg-black border-r border-black-700
           transition-all duration-300 ease-in-out
-          ${isOpen ? 'translate-x-0 w-64' : '-translate-x-full w-64 lg:translate-x-0 lg:w-0 lg:overflow-hidden'}
+          ${isOpen ? 'translate-x-0 w-72' : '-translate-x-full w-72 lg:translate-x-0 lg:w-0 lg:overflow-hidden'}
         `}
       >
         {/* Header with close button (mobile only) */}
@@ -60,9 +63,15 @@ export const Sidebar = ({ apps, isOpen, onClose }: SidebarProps) => {
           <button 
             onClick={onClose}
             className="lg:hidden p-1 rounded-lg text-black-400 hover:text-black-200 hover:bg-black-800 transition-colors"
+            aria-label="Close menu"
           >
             <X className="w-5 h-5" />
           </button>
+        </div>
+
+        {/* Payday Countdown Widget - Expanded */}
+        <div className="p-4">
+          <PaydayCountdownWidget variant="expanded" />
         </div>
 
         {/* Apps List */}
@@ -70,7 +79,7 @@ export const Sidebar = ({ apps, isOpen, onClose }: SidebarProps) => {
           <p className="text-xs font-medium text-black-500 uppercase tracking-wider mb-2">
             Apps ({filteredApps.length})
           </p>
-          <nav className="space-y-1">
+          <nav className="space-y-1" role="navigation">
             {filteredApps.map(app => (
               <NavLink
                 key={app.id}
@@ -91,11 +100,23 @@ export const Sidebar = ({ apps, isOpen, onClose }: SidebarProps) => {
           </nav>
         </div>
 
-        {/* Footer - only visible on mobile */}
-        <div className="border-t border-black-700 p-4 lg:hidden">
+        {/* Footer */}
+        <div className="border-t border-black-700 p-4 space-y-2">
+          {/* GitHub Link */}
+          <a
+            href="https://github.com/xSolstice1/802Collections"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm text-black-400 hover:text-black-200 hover:bg-black-800 transition-colors w-full"
+          >
+            <Github className="w-4 h-4" />
+            GitHub
+          </a>
+
+          {/* Close button - only visible on mobile */}
           <button
             onClick={onClose}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm text-black-400 hover:text-black-200 hover:bg-black-800 transition-colors"
+            className="lg:hidden w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm text-black-400 hover:text-black-200 hover:bg-black-800 transition-colors"
           >
             <Grid3X3 className="w-4 h-4" />
             Close
