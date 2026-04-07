@@ -55,6 +55,14 @@ interface ChaosEvent {
 
 interface Portal { a: Cell; b: Cell; }
 
+interface FallingStone {
+  cell: Cell;
+  spawnTime: number;  // when shadow appears
+  landTime: number;   // when it hits the ground (3s countdown)
+  despawnTime: number; // when it disappears after landing
+  landed: boolean;
+}
+
 const CHAOS_INFO: Record<ChaosType, { color: string; label: string; icon: string; duration: number }> = {
   reverse:  { color: '#ef4444', label: 'REVERSED!',     icon: '🔄', duration: 5000 },
   warp:     { color: '#fbbf24', label: 'WARP SPEED!',   icon: '💨', duration: 3000 },
@@ -64,7 +72,7 @@ const CHAOS_INFO: Record<ChaosType, { color: string; label: string; icon: string
   drunk:    { color: '#34d399', label: 'DRUNK MODE!',   icon: '🍺', duration: 5000 },
   shrink:   { color: '#f97316', label: 'SHRINK RAY!',   icon: '✂️', duration: 0 },
   gravity:  { color: '#60a5fa', label: 'GRAVITY!',      icon: '🌊', duration: 5000 },
-  shake:    { color: '#fbbf24', label: 'EARTHQUAKE!',   icon: '💥', duration: 3000 },
+  shake:    { color: '#fbbf24', label: 'EARTHQUAKE!',   icon: '💥', duration: 6000 },
   rainbow:  { color: '#ec4899', label: 'RAINBOW!',      icon: '🌈', duration: 6000 },
 };
 
@@ -108,6 +116,7 @@ const SnakeApp = () => {
     gravityDir: 'down' as Direction,
     combo: 0,
     lastEatTime: 0,
+    fallingStones: [] as FallingStone[],
   });
   const renderRef = useRef<number>(0);
 
@@ -316,6 +325,28 @@ const SnakeApp = () => {
       const gravDirs: Direction[] = ['up', 'down', 'left', 'right'];
       g.gravityDir = gravDirs[Math.floor(Math.random() * gravDirs.length)];
     }
+
+    if (type === 'shake') {
+      // Spawn falling stones with staggered delays
+      const stoneCount = 4 + Math.floor(Math.random() * 4); // 4-7 stones
+      const occupied = getOccupied(g.snake);
+      occupied.add(`${g.food.x},${g.food.y}`);
+      for (let i = 0; i < stoneCount; i++) {
+        const cell = spawnCell(occupied);
+        if (cell) {
+          occupied.add(`${cell.x},${cell.y}`);
+          const delay = 500 + i * 400 + Math.random() * 600; // staggered 0.5-4s
+          const landTime = now + delay;
+          g.fallingStones.push({
+            cell,
+            spawnTime: now + Math.max(0, delay - 2000), // shadow appears 2s before landing
+            landTime,
+            despawnTime: landTime + 4000, // stays for 4s after landing
+            landed: false,
+          });
+        }
+      }
+    }
   }, [cellCenter, spawnEatParticles, getOccupied, spawnCell]);
 
   // --- Drawing ---
@@ -492,6 +523,122 @@ const SnakeApp = () => {
           ctx.arc(pcx, pcy, CELL_SIZE / 4, 0, Math.PI * 2);
           ctx.fill();
           ctx.restore();
+        }
+      }
+    }
+
+    // --- Falling stones ---
+    if (isCrazy) {
+      for (const stone of g.fallingStones) {
+        if (now < stone.spawnTime) continue; // not visible yet
+        const sx = stone.cell.x * CELL_SIZE;
+        const sy = GRID_OFFSET_Y + stone.cell.y * CELL_SIZE;
+        const scx = sx + CELL_SIZE / 2;
+        const scy = sy + CELL_SIZE / 2;
+
+        if (!stone.landed && now < stone.landTime) {
+          // --- Shadow phase: growing shadow with countdown ---
+          const progress = (now - stone.spawnTime) / (stone.landTime - stone.spawnTime); // 0→1
+          const shadowSize = (CELL_SIZE / 2) * (0.3 + progress * 0.7);
+          const shadowAlpha = 0.15 + progress * 0.4;
+
+          // Shadow ellipse
+          ctx.save();
+          ctx.globalAlpha = shadowAlpha;
+          ctx.fillStyle = '#000';
+          ctx.beginPath();
+          ctx.ellipse(scx, scy, shadowSize, shadowSize * 0.5, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+
+          // Warning indicator - pulsing ring
+          ctx.save();
+          ctx.globalAlpha = 0.3 + Math.sin(t * 10) * 0.2;
+          ctx.strokeStyle = '#ef4444';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.arc(scx, scy, shadowSize + 2, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+
+          // Countdown number
+          const secsLeft = Math.ceil((stone.landTime - now) / 1000);
+          if (secsLeft <= 3) {
+            ctx.save();
+            ctx.globalAlpha = 0.6 + Math.sin(t * 8) * 0.3;
+            ctx.fillStyle = '#ef4444';
+            ctx.font = 'bold 14px "JetBrains Mono", monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.shadowColor = '#ef4444';
+            ctx.shadowBlur = 8;
+            ctx.fillText(`${secsLeft}`, scx, scy);
+            ctx.restore();
+          }
+        } else {
+          // --- Landed stone ---
+          // Impact flash right when landing
+          const timeSinceLand = now - stone.landTime;
+          if (timeSinceLand < 200) {
+            ctx.save();
+            ctx.globalAlpha = 1 - timeSinceLand / 200;
+            ctx.fillStyle = '#fbbf24';
+            ctx.shadowColor = '#fbbf24';
+            ctx.shadowBlur = 20;
+            ctx.beginPath();
+            ctx.arc(scx, scy, CELL_SIZE, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+          }
+
+          // Blink when about to despawn
+          const timeUntilDespawn = stone.despawnTime - now;
+          if (timeUntilDespawn < 1500 && Math.sin(t * 12) > 0.3) {
+            // skip drawing (blink)
+          } else {
+            // Stone body
+            ctx.save();
+            ctx.shadowColor = '#78716c';
+            ctx.shadowBlur = 6;
+            const stoneGrad = ctx.createRadialGradient(scx - 2, scy - 3, 1, scx, scy, CELL_SIZE / 2);
+            stoneGrad.addColorStop(0, '#a8a29e');
+            stoneGrad.addColorStop(0.4, '#78716c');
+            stoneGrad.addColorStop(1, '#44403c');
+            ctx.fillStyle = stoneGrad;
+            ctx.beginPath();
+            // Jagged rock shape
+            const r = CELL_SIZE / 2 - 1;
+            const points = 8;
+            for (let p = 0; p < points; p++) {
+              const angle = (Math.PI * 2 * p) / points - Math.PI / 2;
+              const jitter = 0.75 + ((Math.sin(p * 137.5) + 1) / 2) * 0.35;
+              const px = scx + Math.cos(angle) * r * jitter;
+              const py = scy + Math.sin(angle) * r * jitter;
+              if (p === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+            }
+            ctx.closePath();
+            ctx.fill();
+
+            // Crack lines
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
+            ctx.lineWidth = 0.8;
+            ctx.beginPath();
+            ctx.moveTo(scx - 2, scy - 4);
+            ctx.lineTo(scx + 1, scy);
+            ctx.lineTo(scx - 1, scy + 3);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(scx + 3, scy - 2);
+            ctx.lineTo(scx + 1, scy + 2);
+            ctx.stroke();
+
+            // Highlight
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+            ctx.beginPath();
+            ctx.ellipse(scx - 2, scy - 3, 3, 2, -0.3, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+          }
         }
       }
     }
@@ -1017,6 +1164,30 @@ const SnakeApp = () => {
 
       // Combo decay
       if (now - g.lastEatTime > 3000) g.combo = 0;
+
+      // Stone updates: mark landed, despawn expired, check if stone lands on snake head
+      const head = g.snake[0];
+      for (const stone of g.fallingStones) {
+        if (!stone.landed && now >= stone.landTime) {
+          stone.landed = true;
+          // Impact particles
+          const scx = stone.cell.x * CELL_SIZE + CELL_SIZE / 2;
+          const scy = GRID_OFFSET_Y + stone.cell.y * CELL_SIZE + CELL_SIZE / 2;
+          spawnEatParticles(scx, scy, '#a8a29e', '#78716c', 8);
+          // Kill if stone lands directly on snake head
+          if (head && stone.cell.x === head.x && stone.cell.y === head.y) {
+            g.running = false;
+            setGameState('over');
+            if (g.score > crazyHighScore) {
+              setCrazyHighScore(g.score);
+              localStorage.setItem(STORAGE_KEY_CRAZY, g.score.toString());
+            }
+            draw();
+            return;
+          }
+        }
+      }
+      g.fallingStones = g.fallingStones.filter(s => now < s.despawnTime);
     }
 
     // Modern mode: powerup management
@@ -1081,6 +1252,18 @@ const SnakeApp = () => {
 
     // Crazy wall collision
     if (isCrazy && g.crazyWalls.some(w => w.x === nx && w.y === ny)) {
+      g.running = false;
+      setGameState('over');
+      if (g.score > crazyHighScore) {
+        setCrazyHighScore(g.score);
+        localStorage.setItem(STORAGE_KEY_CRAZY, g.score.toString());
+      }
+      draw();
+      return;
+    }
+
+    // Landed stone collision
+    if (isCrazy && g.fallingStones.some(s => s.landed && s.cell.x === nx && s.cell.y === ny)) {
       g.running = false;
       setGameState('over');
       if (g.score > crazyHighScore) {
@@ -1236,6 +1419,7 @@ const SnakeApp = () => {
     g.gravityDir = 'down';
     g.combo = 0;
     g.lastEatTime = 0;
+    g.fallingStones = [];
     dirQueue.current = [];
     setScore(0);
     setGameState('playing');
