@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Bird, Play } from 'lucide-react';
+import { Bird, Play, Maximize, Minimize } from 'lucide-react';
 
 // --- Game Constants ---
 const CANVAS_W = 800;
@@ -145,6 +145,7 @@ const BirdShitApp = () => {
   const [isPortrait, setIsPortrait] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [portraitDismissed, setPortraitDismissed] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Compute effective stats from upgrades
@@ -1389,6 +1390,24 @@ const BirdShitApp = () => {
     };
   }, []);
 
+  // Track fullscreen state
+  useEffect(() => {
+    const onFullscreenChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
+  }, []);
+
+  const toggleFullscreen = useCallback(async () => {
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+      } else {
+        const el = containerRef.current ?? document.documentElement;
+        await el.requestFullscreen();
+      }
+    } catch {}
+  }, []);
+
   // Clear stuck controls when window loses focus or visibility changes
   useEffect(() => {
     const clearControls = () => {
@@ -1642,6 +1661,24 @@ const BirdShitApp = () => {
           onTouchStart={handleCanvasTouchStart}
           onContextMenu={(e) => e.preventDefault()}
         />
+
+        {/* Fullscreen toggle - mobile overlay */}
+        {mobilePlay && (
+          <button
+            onClick={toggleFullscreen}
+            className="absolute top-2 right-2 z-10 p-2 rounded-lg active:scale-90"
+            style={{
+              background: 'rgba(0,0,0,0.5)',
+              border: '1px solid rgba(255,255,255,0.15)',
+              touchAction: 'none',
+            }}
+          >
+            {isFullscreen
+              ? <Minimize className="w-5 h-5 text-white/70" />
+              : <Maximize className="w-5 h-5 text-white/70" />
+            }
+          </button>
+        )}
 
         {/* === Mobile overlay controls === */}
         {gameState === 'playing' && mobilePlay && (
