@@ -153,7 +153,7 @@ export const initializeApps = (): void => {
   // Register all apps
   appRegistry.registerMany(apps);
   
-  console.log(`[AppInit] Registered ${apps.length} applications`);
+  console.info(`[AppInit] Registered ${apps.length} applications`);
 };
 
 /**

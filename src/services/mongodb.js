@@ -8,9 +8,9 @@ import { MongoClient, ObjectId } from 'mongodb';
 /**
  * MongoDB configuration from environment variables
  */
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017';
-const DB_NAME = process.env.MONGODB_DB_NAME || '802collections';
-const COLLECTION_NAME = process.env.MONGODB_COLLECTION_NAME || 'leaderboard';
+const MONGODB_URI = process.env.MONGODB_URI;
+const DB_NAME = process.env.MONGODB_DB_NAME;
+const COLLECTION_NAME = process.env.MONGODB_COLLECTION_NAME;
 /**
  * MongoDB Connection Manager
  * Singleton pattern to ensure single connection instance

@@ -143,7 +143,7 @@ const WheelOfLunchApp = () => {
         const maxWidth = radius - 40;
         let displayName = option.name;
         if (ctx.measureText(displayName).width > maxWidth) {
-          while (ctx.measureText(displayName + '...').width > maxWidth && displayName.length > 0) {
+          while (ctx.measureText(`${displayName  }...`).width > maxWidth && displayName.length > 0) {
             displayName = displayName.slice(0, -1);
           }
           displayName += '...';
