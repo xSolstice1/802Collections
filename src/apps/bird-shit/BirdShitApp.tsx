@@ -17,13 +17,16 @@ const BASE_POOP_W = 8;
 const BASE_POOP_H = 10;
 const BULLET_W = 8;
 const BULLET_H = 4;
-const BASE_BULLET_SPEED = 3.5;
+const BASE_BULLET_SPEED = 6;
 const HUNTER_W = 24;
 const HUNTER_H = 40;
 const BASE_SPAWN_INTERVAL_PED = 100;
 const BASE_SPAWN_INTERVAL_HUNTER = 250;
 const BASE_HUNTER_SHOOT_INTERVAL = 90;
 const POOP_COOLDOWN_FRAMES = 12;
+const GRAVITY = 0.02;
+const POOP_GRAVITY = 0.1;
+const COUNTDOWN_FRAMES = 180; // 3 seconds at 60fps
 const STORAGE_KEY = 'bird-shit-highscore';
 
 // Level thresholds - score needed to reach each level
@@ -116,6 +119,7 @@ const BirdShitApp = () => {
     wingUp: false,
     hitFlash: 0,
     poopCooldown: 0,
+    countdownTimer: 0,
     upgrades: { ...DEFAULT_UPGRADES } as Upgrades,
     // Difficulty params (recalculated per level)
     scrollSpeed: BASE_SCROLL_SPEED,
@@ -155,116 +159,552 @@ const BirdShitApp = () => {
   const drawBird = (ctx: CanvasRenderingContext2D, x: number, y: number, wingUp: boolean, flash: boolean) => {
     ctx.save();
     if (flash) ctx.globalAlpha = 0.5;
-    ctx.fillStyle = '#44D62C';
+    const cx = x + BIRD_W / 2;
+    const cy = y + BIRD_H / 2;
+
+    // Tail feathers
+    ctx.fillStyle = '#2d8a1e';
     ctx.beginPath();
-    ctx.ellipse(x + BIRD_W / 2, y + BIRD_H / 2, BIRD_W / 2, BIRD_H / 2, 0, 0, Math.PI * 2);
+    ctx.moveTo(x - 2, cy - 2);
+    ctx.lineTo(x - 10, cy - 6);
+    ctx.lineTo(x - 8, cy);
+    ctx.lineTo(x - 11, cy + 4);
+    ctx.lineTo(x - 2, cy + 2);
+    ctx.closePath();
     ctx.fill();
-    ctx.fillStyle = '#37ad24';
+
+    // Body shadow
+    ctx.fillStyle = '#2d9e1a';
     ctx.beginPath();
+    ctx.ellipse(cx, cy + 2, BIRD_W / 2 - 1, BIRD_H / 2 - 1, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Main body with gradient
+    const bodyGrad = ctx.createRadialGradient(cx - 3, cy - 3, 2, cx, cy, BIRD_W / 2);
+    bodyGrad.addColorStop(0, '#6ef54e');
+    bodyGrad.addColorStop(0.6, '#44D62C');
+    bodyGrad.addColorStop(1, '#2d9e1a');
+    ctx.fillStyle = bodyGrad;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, BIRD_W / 2, BIRD_H / 2, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Body outline
+    ctx.strokeStyle = '#1e7a12';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, BIRD_W / 2, BIRD_H / 2, 0, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Belly highlight
+    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    ctx.beginPath();
+    ctx.ellipse(cx + 2, cy + 4, 10, 6, 0.2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Wing with detail
+    ctx.save();
     if (wingUp) {
-      ctx.ellipse(x + BIRD_W / 2 - 2, y - 4, 12, 6, -0.3, 0, Math.PI * 2);
+      // Wing up
+      const wingGrad = ctx.createLinearGradient(cx - 14, y - 10, cx + 10, y + 2);
+      wingGrad.addColorStop(0, '#37ad24');
+      wingGrad.addColorStop(1, '#2d8a1e');
+      ctx.fillStyle = wingGrad;
+      ctx.beginPath();
+      ctx.ellipse(cx - 2, y - 3, 13, 7, -0.3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#1e7a12';
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+      // Wing feather lines
+      ctx.strokeStyle = 'rgba(30,122,18,0.4)';
+      ctx.lineWidth = 0.6;
+      for (let i = 0; i < 3; i++) {
+        ctx.beginPath();
+        ctx.moveTo(cx - 10 + i * 5, y - 7 + i);
+        ctx.lineTo(cx - 4 + i * 4, y + 1);
+        ctx.stroke();
+      }
     } else {
-      ctx.ellipse(x + BIRD_W / 2 - 2, y + BIRD_H - 2, 12, 5, 0.3, 0, Math.PI * 2);
+      // Wing down
+      const wingGrad = ctx.createLinearGradient(cx - 14, cy, cx + 10, y + BIRD_H + 4);
+      wingGrad.addColorStop(0, '#37ad24');
+      wingGrad.addColorStop(1, '#2d8a1e');
+      ctx.fillStyle = wingGrad;
+      ctx.beginPath();
+      ctx.ellipse(cx - 2, y + BIRD_H - 1, 13, 6, 0.3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#1e7a12';
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(30,122,18,0.4)';
+      ctx.lineWidth = 0.6;
+      for (let i = 0; i < 3; i++) {
+        ctx.beginPath();
+        ctx.moveTo(cx - 10 + i * 5, y + BIRD_H + 3 - i);
+        ctx.lineTo(cx - 4 + i * 4, y + BIRD_H - 5);
+        ctx.stroke();
+      }
     }
+    ctx.restore();
+
+    // Eye white with slight shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';
+    ctx.beginPath();
+    ctx.arc(x + BIRD_W - 8, y + 9, 5, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = '#fff';
     ctx.beginPath();
-    ctx.arc(x + BIRD_W - 8, y + 8, 4, 0, Math.PI * 2);
+    ctx.arc(x + BIRD_W - 8, y + 8, 5, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = '#000';
+    ctx.strokeStyle = '#1e7a12';
+    ctx.lineWidth = 0.8;
+    ctx.stroke();
+
+    // Iris
+    ctx.fillStyle = '#1a1a1a';
     ctx.beginPath();
-    ctx.arc(x + BIRD_W - 7, y + 8, 2, 0, Math.PI * 2);
+    ctx.arc(x + BIRD_W - 6, y + 8, 2.5, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = '#f59e0b';
+    // Eye shine
+    ctx.fillStyle = '#fff';
     ctx.beginPath();
-    ctx.moveTo(x + BIRD_W, y + 10);
-    ctx.lineTo(x + BIRD_W + 8, y + 13);
-    ctx.lineTo(x + BIRD_W, y + 16);
+    ctx.arc(x + BIRD_W - 5.5, y + 7, 1, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Beak with gradient
+    const beakGrad = ctx.createLinearGradient(x + BIRD_W, y + 10, x + BIRD_W + 9, y + 14);
+    beakGrad.addColorStop(0, '#fbbf24');
+    beakGrad.addColorStop(1, '#d97706');
+    ctx.fillStyle = beakGrad;
+    ctx.beginPath();
+    ctx.moveTo(x + BIRD_W - 1, y + 10);
+    ctx.quadraticCurveTo(x + BIRD_W + 10, y + 12, x + BIRD_W + 9, y + 14);
+    ctx.lineTo(x + BIRD_W - 1, y + 16);
     ctx.closePath();
     ctx.fill();
+    ctx.strokeStyle = '#b45309';
+    ctx.lineWidth = 0.6;
+    ctx.stroke();
+    // Beak divider line
+    ctx.strokeStyle = '#b45309';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    ctx.moveTo(x + BIRD_W - 1, y + 13);
+    ctx.lineTo(x + BIRD_W + 8, y + 13);
+    ctx.stroke();
+
+    // Tiny blush mark
+    ctx.fillStyle = 'rgba(255,130,130,0.2)';
+    ctx.beginPath();
+    ctx.ellipse(x + BIRD_W - 4, y + 14, 3, 1.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
     ctx.restore();
   };
 
   const drawPedestrian = (ctx: CanvasRenderingContext2D, p: Pedestrian) => {
     ctx.save();
+    const cx = p.x + PED_W / 2;
+    const legOffset = Math.sin(p.x * 0.1) * 3;
+
+    // Poop splat on head if hit
     if (p.hit) {
+      // Dripping poop on head
+      ctx.fillStyle = '#6b3a0a';
+      ctx.beginPath();
+      ctx.ellipse(cx, p.y - 1, 9, 5, 0, 0, Math.PI * 2);
+      ctx.fill();
       ctx.fillStyle = '#854d0e';
       ctx.beginPath();
-      ctx.ellipse(p.x + PED_W / 2, p.y - 2, 8, 5, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx, p.y - 2, 7, 4, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Drip
+      ctx.fillStyle = '#854d0e';
+      ctx.beginPath();
+      ctx.ellipse(cx + 5, p.y + 5, 2, 4, 0.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#a16207';
+      ctx.beginPath();
+      ctx.ellipse(cx, p.y - 3, 3, 2, 0, 0, Math.PI * 2);
       ctx.fill();
     }
-    ctx.fillStyle = p.hit ? '#999' : '#e5e7eb';
+
+    // Shadow on ground
+    ctx.fillStyle = 'rgba(0,0,0,0.2)';
     ctx.beginPath();
-    ctx.arc(p.x + PED_W / 2, p.y + 6, 6, 0, Math.PI * 2);
+    ctx.ellipse(cx, p.y + PED_H + 1, 8, 2, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = p.hit ? '#666' : '#9ca3af';
-    ctx.fillRect(p.x + 4, p.y + 12, 12, 14);
-    ctx.strokeStyle = p.hit ? '#666' : '#9ca3af';
+
+    // Legs with shoes
+    ctx.strokeStyle = p.hit ? '#555' : '#4b5563';
     ctx.lineWidth = 3;
-    const legOffset = Math.sin(p.x * 0.1) * 3;
+    ctx.lineCap = 'round';
     ctx.beginPath();
     ctx.moveTo(p.x + 7, p.y + 26);
-    ctx.lineTo(p.x + 5 + legOffset, p.y + PED_H);
+    ctx.lineTo(p.x + 5 + legOffset, p.y + PED_H - 2);
     ctx.stroke();
     ctx.beginPath();
     ctx.moveTo(p.x + 13, p.y + 26);
-    ctx.lineTo(p.x + 15 - legOffset, p.y + PED_H);
+    ctx.lineTo(p.x + 15 - legOffset, p.y + PED_H - 2);
     ctx.stroke();
+    // Shoes
+    ctx.fillStyle = p.hit ? '#444' : '#374151';
+    ctx.beginPath();
+    ctx.ellipse(p.x + 5 + legOffset, p.y + PED_H - 1, 3, 2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(p.x + 15 - legOffset, p.y + PED_H - 1, 3, 2, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Body (torso with gradient)
+    const torsoGrad = ctx.createLinearGradient(p.x + 3, p.y + 12, p.x + 17, p.y + 27);
+    if (p.hit) {
+      torsoGrad.addColorStop(0, '#555');
+      torsoGrad.addColorStop(1, '#444');
+    } else {
+      torsoGrad.addColorStop(0, '#60a5fa');
+      torsoGrad.addColorStop(1, '#3b82f6');
+    }
+    ctx.fillStyle = torsoGrad;
+    // Rounded torso
+    ctx.beginPath();
+    ctx.moveTo(p.x + 4, p.y + 14);
+    ctx.quadraticCurveTo(p.x + 3, p.y + 12, p.x + 6, p.y + 12);
+    ctx.lineTo(p.x + 14, p.y + 12);
+    ctx.quadraticCurveTo(p.x + 17, p.y + 12, p.x + 16, p.y + 14);
+    ctx.lineTo(p.x + 16, p.y + 26);
+    ctx.lineTo(p.x + 4, p.y + 26);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = p.hit ? '#333' : '#2563eb';
+    ctx.lineWidth = 0.6;
+    ctx.stroke();
+
+    // Arms
+    ctx.strokeStyle = p.hit ? '#888' : '#e5c9a8';
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    const armSwing = Math.sin(p.x * 0.1) * 4;
+    ctx.beginPath();
+    ctx.moveTo(p.x + 4, p.y + 15);
+    ctx.lineTo(p.x + 1, p.y + 22 + armSwing);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(p.x + 16, p.y + 15);
+    ctx.lineTo(p.x + 19, p.y + 22 - armSwing);
+    ctx.stroke();
+
+    // Head with skin tone
+    const headGrad = ctx.createRadialGradient(cx - 1, p.y + 5, 1, cx, p.y + 6, 7);
+    if (p.hit) {
+      headGrad.addColorStop(0, '#aaa');
+      headGrad.addColorStop(1, '#888');
+    } else {
+      headGrad.addColorStop(0, '#fcd9b6');
+      headGrad.addColorStop(1, '#e5c9a8');
+    }
+    ctx.fillStyle = headGrad;
+    ctx.beginPath();
+    ctx.arc(cx, p.y + 6, 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = p.hit ? '#666' : '#c9a87c';
+    ctx.lineWidth = 0.6;
+    ctx.stroke();
+
+    // Hair
+    ctx.fillStyle = p.hit ? '#555' : '#4a3728';
+    ctx.beginPath();
+    ctx.arc(cx, p.y + 4, 6, Math.PI, Math.PI * 2);
+    ctx.fill();
+
+    // Eyes (different expression when hit)
+    if (p.hit) {
+      // X eyes when hit
+      ctx.strokeStyle = '#333';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(cx - 4, p.y + 4);
+      ctx.lineTo(cx - 2, p.y + 6);
+      ctx.moveTo(cx - 2, p.y + 4);
+      ctx.lineTo(cx - 4, p.y + 6);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(cx + 2, p.y + 4);
+      ctx.lineTo(cx + 4, p.y + 6);
+      ctx.moveTo(cx + 4, p.y + 4);
+      ctx.lineTo(cx + 2, p.y + 6);
+      ctx.stroke();
+      // Frown
+      ctx.beginPath();
+      ctx.arc(cx, p.y + 11, 2, Math.PI, 0);
+      ctx.stroke();
+    } else {
+      // Normal eyes
+      ctx.fillStyle = '#1a1a1a';
+      ctx.beginPath();
+      ctx.arc(cx - 2.5, p.y + 5.5, 1, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(cx + 2.5, p.y + 5.5, 1, 0, Math.PI * 2);
+      ctx.fill();
+      // Smile
+      ctx.strokeStyle = '#a0845e';
+      ctx.lineWidth = 0.6;
+      ctx.beginPath();
+      ctx.arc(cx, p.y + 7, 2, 0.1, Math.PI - 0.1);
+      ctx.stroke();
+    }
+
     ctx.restore();
   };
 
   const drawHunter = (ctx: CanvasRenderingContext2D, h: Hunter) => {
     ctx.save();
-    ctx.fillStyle = '#dc2626';
-    ctx.beginPath();
-    ctx.arc(h.x + HUNTER_W / 2, h.y + 6, 7, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#7f1d1d';
-    ctx.fillRect(h.x + 2, h.y - 4, HUNTER_W - 4, 8);
-    ctx.fillRect(h.x + 6, h.y - 10, HUNTER_W - 12, 8);
-    ctx.fillStyle = '#991b1b';
-    ctx.fillRect(h.x + 4, h.y + 13, 16, 16);
-    ctx.strokeStyle = '#6b7280';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(h.x + HUNTER_W / 2, h.y + 16);
-    ctx.lineTo(h.x + HUNTER_W / 2 + 10, h.y + 4);
-    ctx.stroke();
-    ctx.fillStyle = '#374151';
-    ctx.fillRect(h.x + HUNTER_W / 2 + 6, h.y - 2, 4, 10);
-    ctx.strokeStyle = '#991b1b';
-    ctx.lineWidth = 3;
+    const cx = h.x + HUNTER_W / 2;
     const legOffset = Math.sin(h.x * 0.08) * 3;
+
+    // Shadow on ground
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.beginPath();
+    ctx.ellipse(cx, h.y + HUNTER_H + 1, 10, 2.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Legs with boots
+    ctx.strokeStyle = '#4a3728';
+    ctx.lineWidth = 3.5;
+    ctx.lineCap = 'round';
     ctx.beginPath();
     ctx.moveTo(h.x + 8, h.y + 29);
-    ctx.lineTo(h.x + 6 + legOffset, h.y + HUNTER_H);
+    ctx.lineTo(h.x + 6 + legOffset, h.y + HUNTER_H - 2);
     ctx.stroke();
     ctx.beginPath();
     ctx.moveTo(h.x + 16, h.y + 29);
-    ctx.lineTo(h.x + 18 - legOffset, h.y + HUNTER_H);
+    ctx.lineTo(h.x + 18 - legOffset, h.y + HUNTER_H - 2);
     ctx.stroke();
+    // Heavy boots
+    ctx.fillStyle = '#3a2a1a';
+    ctx.beginPath();
+    ctx.ellipse(h.x + 6 + legOffset, h.y + HUNTER_H - 1, 4, 2.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(h.x + 18 - legOffset, h.y + HUNTER_H - 1, 4, 2.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Vest / torso with gradient
+    const vestGrad = ctx.createLinearGradient(h.x + 3, h.y + 13, h.x + 21, h.y + 30);
+    vestGrad.addColorStop(0, '#8b4513');
+    vestGrad.addColorStop(0.5, '#6b3410');
+    vestGrad.addColorStop(1, '#5a2d0e');
+    ctx.fillStyle = vestGrad;
+    ctx.beginPath();
+    ctx.moveTo(h.x + 4, h.y + 13);
+    ctx.lineTo(h.x + 20, h.y + 13);
+    ctx.lineTo(h.x + 20, h.y + 30);
+    ctx.lineTo(h.x + 4, h.y + 30);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#4a2508';
+    ctx.lineWidth = 0.6;
+    ctx.stroke();
+
+    // Vest pockets
+    ctx.strokeStyle = '#4a2508';
+    ctx.lineWidth = 0.5;
+    ctx.strokeRect(h.x + 6, h.y + 20, 5, 4);
+    ctx.strokeRect(h.x + 13, h.y + 20, 5, 4);
+
+    // Ammo belt
+    ctx.fillStyle = '#654321';
+    ctx.fillRect(h.x + 3, h.y + 17, 18, 3);
+    ctx.fillStyle = '#fbbf24';
+    for (let i = 0; i < 4; i++) {
+      ctx.fillRect(h.x + 5 + i * 4, h.y + 17.5, 2, 2);
+    }
+
+    // Gun arm (back arm with rifle)
+    ctx.strokeStyle = '#8b7355';
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(cx + 2, h.y + 16);
+    ctx.lineTo(cx + 12, h.y + 6);
+    ctx.stroke();
+
+    // Rifle
+    ctx.fillStyle = '#5a4a3a';
+    ctx.save();
+    ctx.translate(cx + 12, h.y + 6);
+    ctx.rotate(-0.8);
+    ctx.fillRect(-2, -12, 3, 16);
+    // Rifle barrel
+    ctx.fillStyle = '#6b7280';
+    ctx.fillRect(-1.5, -18, 2, 8);
+    // Rifle stock
+    ctx.fillStyle = '#4a3a2a';
+    ctx.fillRect(-2.5, 2, 4, 5);
+    ctx.restore();
+
+    // Front arm
+    ctx.strokeStyle = '#e5c9a8';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(h.x + 6, h.y + 16);
+    ctx.lineTo(h.x + 2, h.y + 24);
+    ctx.stroke();
+
+    // Head with skin
+    const headGrad = ctx.createRadialGradient(cx - 1, h.y + 5, 1, cx, h.y + 6, 8);
+    headGrad.addColorStop(0, '#f0d0a8');
+    headGrad.addColorStop(1, '#d4aa78');
+    ctx.fillStyle = headGrad;
+    ctx.beginPath();
+    ctx.arc(cx, h.y + 6, 7, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#b8956a';
+    ctx.lineWidth = 0.6;
+    ctx.stroke();
+
+    // Hat (safari/hunter hat with brim)
+    ctx.fillStyle = '#5a4a2a';
+    // Brim
+    ctx.beginPath();
+    ctx.ellipse(cx, h.y - 2, 13, 3, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Crown
+    ctx.fillStyle = '#6b5a3a';
+    ctx.beginPath();
+    ctx.moveTo(h.x + 4, h.y - 2);
+    ctx.quadraticCurveTo(cx, h.y - 14, h.x + HUNTER_W - 4, h.y - 2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#4a3a1a';
+    ctx.lineWidth = 0.6;
+    ctx.stroke();
+    // Hat band
+    ctx.fillStyle = '#dc2626';
+    ctx.fillRect(h.x + 5, h.y - 4, HUNTER_W - 10, 2);
+
+    // Angry eyes
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(cx - 3, h.y + 5, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(cx + 3, h.y + 5, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+    // Pupils
+    ctx.fillStyle = '#1a1a1a';
+    ctx.beginPath();
+    ctx.arc(cx - 2.5, h.y + 5.5, 1.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(cx + 3.5, h.y + 5.5, 1.2, 0, Math.PI * 2);
+    ctx.fill();
+    // Angry eyebrows
+    ctx.strokeStyle = '#4a3728';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(cx - 5, h.y + 1);
+    ctx.lineTo(cx - 1, h.y + 2.5);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(cx + 5, h.y + 1);
+    ctx.lineTo(cx + 1, h.y + 2.5);
+    ctx.stroke();
+    // Grim mouth
+    ctx.strokeStyle = '#8b6a4a';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(cx - 3, h.y + 10);
+    ctx.lineTo(cx + 3, h.y + 10);
+    ctx.stroke();
+
+    // Stubble dots
+    ctx.fillStyle = 'rgba(74,55,40,0.3)';
+    for (let i = 0; i < 5; i++) {
+      ctx.beginPath();
+      ctx.arc(cx - 3 + i * 1.5, h.y + 11 + (i % 2) * 0.5, 0.4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
     ctx.restore();
   };
 
   const drawBullet = (ctx: CanvasRenderingContext2D, b: Bullet) => {
     ctx.save();
-    ctx.fillStyle = '#ef4444';
+    // Bullet trail
+    const angle = Math.atan2(b.vy, b.vx);
+    ctx.strokeStyle = 'rgba(239,68,68,0.3)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(b.x + BULLET_W / 2, b.y + BULLET_H / 2);
+    ctx.lineTo(b.x + BULLET_W / 2 - Math.cos(angle) * 12, b.y + BULLET_H / 2 - Math.sin(angle) * 12);
+    ctx.stroke();
+
+    // Outer glow
     ctx.shadowColor = '#ef4444';
-    ctx.shadowBlur = 6;
-    ctx.fillRect(b.x, b.y, BULLET_W, BULLET_H);
+    ctx.shadowBlur = 8;
+    // Bullet body
+    ctx.fillStyle = '#fbbf24';
+    ctx.translate(b.x + BULLET_W / 2, b.y + BULLET_H / 2);
+    ctx.rotate(angle);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, BULLET_W / 2, BULLET_H / 2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Bullet tip highlight
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.ellipse(2, 0, 1.5, 1, 0, 0, Math.PI * 2);
+    ctx.fill();
     ctx.restore();
   };
 
   const drawPoop = (ctx: CanvasRenderingContext2D, p: Poop) => {
     ctx.save();
+    const cx = p.x + p.w / 2;
+    const cy = p.y + p.h / 2;
+    const s = p.w / BASE_POOP_W; // scale factor for upgrades
+
+    // Classic swirl poop shape - stacked blobs
+    // Bottom blob (widest)
+    const poopGrad = ctx.createRadialGradient(cx - 1 * s, cy + 1 * s, 0, cx, cy, p.w / 1.5);
+    poopGrad.addColorStop(0, '#a0722b');
+    poopGrad.addColorStop(1, '#6b3a0a');
+    ctx.fillStyle = poopGrad;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + 2 * s, p.w / 2, p.h / 3, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Middle blob
     ctx.fillStyle = '#854d0e';
     ctx.beginPath();
-    ctx.ellipse(p.x + p.w / 2, p.y + p.h / 2, p.w / 2, p.h / 2, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx, cy - 1 * s, p.w / 2.5, p.h / 3, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = '#a16207';
+
+    // Top blob (smallest - the tip)
+    ctx.fillStyle = '#996322';
     ctx.beginPath();
-    ctx.ellipse(p.x + p.w / 2, p.y + 2, Math.min(3, p.w / 2), 2, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx + 0.5 * s, cy - 3.5 * s, p.w / 4, p.h / 4.5, 0.3, 0, Math.PI * 2);
     ctx.fill();
+
+    // Highlight
+    ctx.fillStyle = 'rgba(255,255,255,0.15)';
+    ctx.beginPath();
+    ctx.ellipse(cx - 1 * s, cy - 2 * s, 1.5 * s, 1 * s, -0.3, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Stink lines when moving fast
+    ctx.strokeStyle = 'rgba(120,100,50,0.3)';
+    ctx.lineWidth = 0.5;
+    for (let i = 0; i < 2; i++) {
+      const sx = cx - 3 * s + i * 6 * s;
+      ctx.beginPath();
+      ctx.moveTo(sx, p.y - 1 * s);
+      ctx.quadraticCurveTo(sx + 1.5 * s, p.y - 3 * s, sx, p.y - 5 * s);
+      ctx.stroke();
+    }
+
     ctx.restore();
   };
 
@@ -302,7 +742,7 @@ const BirdShitApp = () => {
   // --- Drop poop with upgrades ---
   const dropPoop = useCallback(() => {
     const g = gameRef.current;
-    if (!g.running || g.poopCooldown > 0) return;
+    if (!g.running || g.poopCooldown > 0 || g.countdownTimer > 0) return;
     g.poopCooldown = POOP_COOLDOWN_FRAMES;
 
     const pw = getPoopW(g.upgrades);
@@ -322,7 +762,7 @@ const BirdShitApp = () => {
         y: g.birdY + BIRD_H,
         w: pw,
         h: ph,
-        vy: ps,
+        vy: ps * 0.35, // start slow, gravity accelerates
         vx,
       });
     }
@@ -444,9 +884,12 @@ const BirdShitApp = () => {
     if (g.hitFlash > 0) g.hitFlash--;
     if (g.poopCooldown > 0) g.poopCooldown--;
 
-    // --- Check level up ---
+    const inCountdown = g.countdownTimer > 0;
+    if (inCountdown) g.countdownTimer--;
+
+    // --- Check level up (not during countdown) ---
     const nextThreshold = getLevelThreshold(g.level);
-    if (g.score >= nextThreshold) {
+    if (!inCountdown && g.score >= nextThreshold) {
       g.running = false;
       g.level++;
       setLevel(g.level);
@@ -455,7 +898,7 @@ const BirdShitApp = () => {
       return;
     }
 
-    // --- Bird free movement ---
+    // --- Bird free movement (always allowed, even during countdown) ---
     const birdSpd = getBirdSpeed(g.upgrades);
     const keys = keysRef.current;
     if (keys.has('ArrowUp') || keys.has('KeyW')) g.birdY -= birdSpd;
@@ -468,37 +911,44 @@ const BirdShitApp = () => {
     if (g.birdY < SKY_MIN) g.birdY = SKY_MIN;
     if (g.birdY > GROUND_Y - BIRD_H - 10) g.birdY = GROUND_Y - BIRD_H - 10;
 
-    // Spawn pedestrians
-    if (g.frame % g.spawnIntervalPed === 0) {
-      g.pedestrians.push({
-        x: CANVAS_W + Math.random() * 100,
-        y: GROUND_Y - PED_H,
-        w: PED_W,
-        h: PED_H,
-        hit: false,
-        speed: g.scrollSpeed + Math.random() * 0.5,
-      });
-    }
+    // --- Spawning & combat only when not in countdown ---
+    if (!inCountdown) {
+      // Spawn pedestrians
+      if (g.frame % g.spawnIntervalPed === 0) {
+        g.pedestrians.push({
+          x: CANVAS_W + Math.random() * 100,
+          y: GROUND_Y - PED_H,
+          w: PED_W,
+          h: PED_H,
+          hit: false,
+          speed: g.scrollSpeed + Math.random() * 0.5,
+        });
+      }
 
-    // Spawn hunters (after a brief grace period at start of each level segment)
-    if (g.frame % g.spawnIntervalHunter === 0 && g.frame > 120) {
-      g.hunters.push({
-        x: CANVAS_W + Math.random() * 60,
-        y: GROUND_Y - HUNTER_H,
-        w: HUNTER_W,
-        h: HUNTER_H,
-        speed: g.scrollSpeed * 0.7 + Math.random() * 0.3,
-        shootTimer: 30 + Math.floor(Math.random() * 40),
-      });
+      // Spawn hunters
+      if (g.frame % g.spawnIntervalHunter === 0 && g.frame > 120) {
+        g.hunters.push({
+          x: CANVAS_W + Math.random() * 60,
+          y: GROUND_Y - HUNTER_H,
+          w: HUNTER_W,
+          h: HUNTER_H,
+          speed: g.scrollSpeed * 0.7 + Math.random() * 0.3,
+          shootTimer: 30 + Math.floor(Math.random() * 40),
+        });
+      }
     }
 
     // Homing poop logic
     const homingStr = getHomingStrength(g.upgrades);
 
-    // Update poops
+    // Update poops (gravity-accelerated)
     g.poops = g.poops.filter(p => {
+      // Apply gravity to poop - accelerates downward
+      p.vy += POOP_GRAVITY;
       p.y += p.vy;
       p.x += p.vx;
+      // Air resistance on horizontal movement
+      p.vx *= 0.99;
 
       // Homing: nudge toward nearest target
       if (homingStr > 0) {
@@ -512,14 +962,13 @@ const BirdShitApp = () => {
           const dx = (t.x + t.w / 2) - (p.x + p.w / 2);
           const dy = (t.y + t.h / 2) - (p.y + p.h / 2);
           const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < nearestDist && dy > 0) { // only track things below
+          if (dist < nearestDist && dy > 0) {
             nearestDist = dist;
             nearestDx = dx;
           }
         }
         if (nearestDist < 200) {
           p.vx += (nearestDx > 0 ? 1 : -1) * homingStr * 0.1;
-          // Dampen vx slightly
           p.vx *= 0.97;
         }
       }
@@ -559,35 +1008,40 @@ const BirdShitApp = () => {
       return p.x > -PED_W;
     });
 
-    // Update hunters & shooting
+    // Update hunters & shooting (no shooting during countdown)
     g.hunters = g.hunters.filter(h => {
       h.x -= h.speed;
-      h.shootTimer--;
-      if (h.shootTimer <= 0 && h.x > 0 && h.x < CANVAS_W) {
-        const dx = g.birdX - (h.x + HUNTER_W / 2);
-        const dy = g.birdY - (h.y - 10);
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist > 0) {
-          g.bullets.push({
-            x: h.x + HUNTER_W / 2,
-            y: h.y - 4,
-            w: BULLET_W,
-            h: BULLET_H,
-            vx: (dx / dist) * g.bulletSpeed,
-            vy: (dy / dist) * g.bulletSpeed,
-          });
+      if (!inCountdown) {
+        h.shootTimer--;
+        if (h.shootTimer <= 0 && h.x > 0 && h.x < CANVAS_W) {
+          const dx = g.birdX - (h.x + HUNTER_W / 2);
+          const dy = g.birdY - (h.y - 10);
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist > 0) {
+            g.bullets.push({
+              x: h.x + HUNTER_W / 2,
+              y: h.y - 4,
+              w: BULLET_W,
+              h: BULLET_H,
+              vx: (dx / dist) * g.bulletSpeed,
+              vy: (dy / dist) * g.bulletSpeed,
+            });
+          }
+          h.shootTimer = g.hunterShootInterval + Math.floor(Math.random() * 40);
         }
-        h.shootTimer = g.hunterShootInterval + Math.floor(Math.random() * 40);
       }
       return h.x > -HUNTER_W - 10;
     });
 
-    // Update bullets
+    // Update bullets (gravity-affected)
     const birdEntity: Entity = { x: g.birdX + 4, y: g.birdY + 4, w: BIRD_W - 8, h: BIRD_H - 8 };
     g.bullets = g.bullets.filter(b => {
+      // Apply gravity - bullets arc downward over time
+      b.vy += GRAVITY;
       b.x += b.vx;
       b.y += b.vy;
-      if (g.hitFlash === 0 && collides(b, birdEntity)) {
+      // No collision during countdown
+      if (!inCountdown && g.hitFlash === 0 && collides(b, birdEntity)) {
         g.lives--;
         g.hitFlash = 40;
         setLives(g.lives);
@@ -675,6 +1129,41 @@ const BirdShitApp = () => {
     ctx.font = '14px "JetBrains Mono", monospace';
     ctx.fillText(`Best: ${Math.max(g.score, highScore)}`, CANVAS_W - 16, 30);
 
+    // --- Countdown overlay ---
+    if (inCountdown) {
+      // Semi-transparent overlay
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+      ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+
+      const secondsLeft = Math.ceil(g.countdownTimer / 60);
+      const frameInSecond = g.countdownTimer % 60;
+      const scale = 1 + (frameInSecond / 60) * 0.3; // pulse effect
+
+      ctx.save();
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      if (secondsLeft > 0) {
+        // Number countdown
+        ctx.font = `bold ${Math.round(72 * scale)}px Inter, sans-serif`;
+        ctx.fillStyle = '#44D62C';
+        ctx.shadowColor = '#44D62C';
+        ctx.shadowBlur = 20;
+        ctx.fillText(`${secondsLeft}`, CANVAS_W / 2, CANVAS_H / 2 - 20);
+        ctx.shadowBlur = 0;
+
+        // Level label
+        ctx.font = 'bold 18px Inter, sans-serif';
+        ctx.fillStyle = '#fbbf24';
+        ctx.fillText(`Level ${g.level}`, CANVAS_W / 2, CANVAS_H / 2 + 30);
+
+        ctx.font = '14px Inter, sans-serif';
+        ctx.fillStyle = '#9ca3af';
+        ctx.fillText('Get ready!', CANVAS_W / 2, CANVAS_H / 2 + 55);
+      }
+      ctx.restore();
+    }
+
     frameRef.current = requestAnimationFrame(gameLoop);
   }, [highScore, setDifficulty, getBirdSpeed, getHomingStrength, getPoopSpeed, getPoopW, getPoopH]);
 
@@ -706,8 +1195,9 @@ const BirdShitApp = () => {
   const continueFromUpgrade = useCallback(() => {
     const g = gameRef.current;
     g.running = true;
-    // Clear existing enemies/bullets for a fresh start to the new level
+    // Clear bullets for a fresh start to the new level
     g.bullets = [];
+    g.countdownTimer = COUNTDOWN_FRAMES;
     setGameState('playing');
     frameRef.current = requestAnimationFrame(gameLoop);
   }, [gameLoop]);
@@ -728,6 +1218,7 @@ const BirdShitApp = () => {
     g.frame = 0;
     g.hitFlash = 0;
     g.poopCooldown = 0;
+    g.countdownTimer = COUNTDOWN_FRAMES;
     g.upgrades = { ...DEFAULT_UPGRADES };
     setDifficulty(g, 1);
     setScore(0);
