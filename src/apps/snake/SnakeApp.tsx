@@ -1281,6 +1281,10 @@ const SnakeApp = () => {
       } else {
         g.running = false;
         setGameState('over');
+        // Play death sound
+        if (soundEnabled) {
+          snakeSoundManager.playDeath();
+        }
         const storageKey = gameMode === 'classic' ? STORAGE_KEY_CLASSIC : gameMode === 'modern' ? STORAGE_KEY_MODERN : STORAGE_KEY_CRAZY;
         const hs = gameMode === 'classic' ? highScore : gameMode === 'modern' ? modernHighScore : crazyHighScore;
         if (g.score > hs) {
@@ -1297,9 +1301,14 @@ const SnakeApp = () => {
     }
 
     // Crazy wall collision
+    // Crazy wall collision
     if (isCrazy && g.crazyWalls.some(w => w.x === nx && w.y === ny)) {
       g.running = false;
       setGameState('over');
+      // Play death sound
+      if (soundEnabled) {
+        snakeSoundManager.playDeath();
+      }
       if (g.score > crazyHighScore) {
         setCrazyHighScore(g.score);
         localStorage.setItem(STORAGE_KEY_CRAZY, g.score.toString());
@@ -1314,6 +1323,10 @@ const SnakeApp = () => {
     if (isCrazy && g.fallingStones.some(s => s.landed && s.cell.x === nx && s.cell.y === ny)) {
       g.running = false;
       setGameState('over');
+      // Play death sound
+      if (soundEnabled) {
+        snakeSoundManager.playDeath();
+      }
       if (g.score > crazyHighScore) {
         setCrazyHighScore(g.score);
         localStorage.setItem(STORAGE_KEY_CRAZY, g.score.toString());
@@ -1339,6 +1352,10 @@ const SnakeApp = () => {
       } else {
         g.running = false;
         setGameState('over');
+        // Play death sound
+        if (soundEnabled) {
+          snakeSoundManager.playDeath();
+        }
         const storageKey = gameMode === 'classic' ? STORAGE_KEY_CLASSIC : gameMode === 'modern' ? STORAGE_KEY_MODERN : STORAGE_KEY_CRAZY;
         const hs = gameMode === 'classic' ? highScore : gameMode === 'modern' ? modernHighScore : crazyHighScore;
         if (g.score > hs) {
