@@ -314,25 +314,46 @@ export const parseResumeFromJSON = async (file: File): Promise<ResumeData | null
 const validateResumeData = (data: Record<string, unknown>): ResumeData | null => {
   if (!data || typeof data !== 'object') return null;
 
+  const contact = data.contact
+  const isContactRecord =
+    contact && typeof contact === 'object' && contact instanceof Object
+  const contactRecord = isContactRecord
+    ? (contact as Record<string, unknown>)
+    : {}
+
   // Ensure all required fields exist with defaults
   return {
     contact: {
-      fullName: data.contact?.fullName || '',
-      title: data.contact?.title || '',
-      email: data.contact?.email || '',
-      phone: data.contact?.phone || '',
-      location: data.contact?.location || '',
-      website: data.contact?.website || '',
-      linkedin: data.contact?.linkedin || '',
-      github: data.contact?.github || '',
-      summary: data.contact?.summary || '',
+      fullName:
+        typeof contactRecord.fullName === 'string'
+          ? contactRecord.fullName
+          : '',
+      title: typeof contactRecord.title === 'string' ? contactRecord.title : '',
+      email: typeof contactRecord.email === 'string' ? contactRecord.email : '',
+      phone: typeof contactRecord.phone === 'string' ? contactRecord.phone : '',
+      location:
+        typeof contactRecord.location === 'string'
+          ? contactRecord.location
+          : '',
+      website:
+        typeof contactRecord.website === 'string' ? contactRecord.website : '',
+      linkedin:
+        typeof contactRecord.linkedin === 'string'
+          ? contactRecord.linkedin
+          : '',
+      github:
+        typeof contactRecord.github === 'string' ? contactRecord.github : '',
+      summary:
+        typeof contactRecord.summary === 'string' ? contactRecord.summary : ''
     },
     experience: Array.isArray(data.experience) ? data.experience : [],
     education: Array.isArray(data.education) ? data.education : [],
-    certifications: Array.isArray(data.certifications) ? data.certifications : [],
+    certifications: Array.isArray(data.certifications)
+      ? data.certifications
+      : [],
     awards: Array.isArray(data.awards) ? data.awards : [],
-    skills: Array.isArray(data.skills) ? data.skills : [],
-  };
+    skills: Array.isArray(data.skills) ? data.skills : []
+  }
 };
 
 /**
