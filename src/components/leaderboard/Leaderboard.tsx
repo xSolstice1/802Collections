@@ -39,8 +39,6 @@ export const Leaderboard: React.FC = () => {
       await leaderboardApi.addEntry(name, score);
       // Refresh the leaderboard after successful submission
       await fetchEntries();
-    } catch (error) {
-      throw error;
     } finally {
       setSubmitting(false);
     }

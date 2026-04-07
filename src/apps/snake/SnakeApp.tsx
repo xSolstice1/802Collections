@@ -85,6 +85,8 @@ const SnakeApp = () => {
   const tickRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dirQueue = useRef<Direction[]>([]);
   const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const startGameRef = useRef<() => void>(() => {});
+  const submitScoreRef = useRef<(score: number) => void>(() => {});
 
   interface Particle {
     x: number; y: number;
@@ -122,21 +124,31 @@ const SnakeApp = () => {
   });
   const renderRef = useRef<number>(0);
 
-  const [gameState, setGameState] = useState<GameState>('idle');
-  const [gameMode, setGameMode] = useState<GameMode>('classic');
+  const [gameState, _setGameState] = useState<GameState>('idle');
+  const gameStateRef = useRef<GameState>('idle');
+  const setGameState = useCallback((s: GameState) => { gameStateRef.current = s; _setGameState(s); }, []);
+  const [gameMode, _setGameMode] = useState<GameMode>('classic');
+  const gameModeRef = useRef<GameMode>('classic');
+  const setGameMode = useCallback((m: GameMode) => { gameModeRef.current = m; _setGameMode(m); }, []);
   const [score, setScore] = useState(0);
-  const [highScore, setHighScore] = useState(() => {
+  const [highScore, _setHighScore] = useState(() => {
     const saved = localStorage.getItem(STORAGE_KEY_CLASSIC);
     return saved ? parseInt(saved, 10) : 0;
   });
-  const [modernHighScore, setModernHighScore] = useState(() => {
+  const highScoreRef = useRef(highScore);
+  const setHighScore = useCallback((s: number) => { highScoreRef.current = s; _setHighScore(s); }, []);
+  const [modernHighScore, _setModernHighScore] = useState(() => {
     const saved = localStorage.getItem(STORAGE_KEY_MODERN);
     return saved ? parseInt(saved, 10) : 0;
   });
-  const [crazyHighScore, setCrazyHighScore] = useState(() => {
+  const modernHighScoreRef = useRef(modernHighScore);
+  const setModernHighScore = useCallback((s: number) => { modernHighScoreRef.current = s; _setModernHighScore(s); }, []);
+  const [crazyHighScore, _setCrazyHighScore] = useState(() => {
     const saved = localStorage.getItem(STORAGE_KEY_CRAZY);
     return saved ? parseInt(saved, 10) : 0;
   });
+  const crazyHighScoreRef = useRef(crazyHighScore);
+  const setCrazyHighScore = useCallback((s: number) => { crazyHighScoreRef.current = s; _setCrazyHighScore(s); }, []);
   const [isMobile, setIsMobile] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [playerName, setPlayerName] = useState(() => {
@@ -171,7 +183,9 @@ const SnakeApp = () => {
         const el = gameAreaRef.current ?? document.documentElement;
         await el.requestFullscreen();
       }
-    } catch {}
+    } catch {
+      // fullscreen may not be available
+    }
   }, []);
 
   // --- Helpers ---
@@ -369,7 +383,8 @@ const SnakeApp = () => {
     g.frame++;
     const t = Date.now() / 1000;
     const now = Date.now();
-    const isCrazy = gameMode === 'crazy';
+    const mode = gameModeRef.current;
+    const isCrazy = mode === 'crazy';
 
     // Screen shake offset
     let shakeX = 0, shakeY = 0;
@@ -1058,9 +1073,9 @@ const SnakeApp = () => {
     ctx.beginPath(); ctx.roundRect(CANVAS_W - 140, 8, 130, 28, 14); ctx.fill();
     ctx.strokeStyle = 'rgba(107, 114, 128, 0.3)'; ctx.lineWidth = 1; ctx.stroke();
 
-    const bestScore = gameMode === 'classic' ? Math.max(g.score, highScore)
-      : gameMode === 'modern' ? Math.max(g.score, modernHighScore)
-      : Math.max(g.score, crazyHighScore);
+    const bestScore = mode === 'classic' ? Math.max(g.score, highScoreRef.current)
+      : mode === 'modern' ? Math.max(g.score, modernHighScoreRef.current)
+      : Math.max(g.score, crazyHighScoreRef.current);
     ctx.fillStyle = '#9ca3af';
     ctx.font = '13px "JetBrains Mono", monospace';
     ctx.textAlign = 'right';
@@ -1087,7 +1102,7 @@ const SnakeApp = () => {
     }
 
     // Active powerup indicators (modern)
-    if (gameMode === 'modern') {
+    if (mode === 'modern') {
       const active = g.activePowerups.filter(ap => ap.endTime > now);
       let px = 250;
       for (const ap of active) {
@@ -1126,14 +1141,31 @@ const SnakeApp = () => {
     ctx.restore();
     // Restore shake translate
     ctx.restore();
-  }, [highScore, modernHighScore, crazyHighScore, gameMode, cellCenter, hasPowerup, hasChaos]);
+  }, [cellCenter, hasPowerup, hasChaos]);
 
   // --- Game tick ---
   const tick = useCallback(() => {
     const g = gameRef.current;
     if (!g.running) return;
     const now = Date.now();
-    const isCrazy = gameMode === 'crazy';
+    const mode = gameModeRef.current;
+    const isCrazy = mode === 'crazy';
+
+    // Helper to handle game over with high score check
+    const handleGameOver = () => {
+      g.running = false;
+      setGameState('over');
+      const storageKey = mode === 'classic' ? STORAGE_KEY_CLASSIC : mode === 'modern' ? STORAGE_KEY_MODERN : STORAGE_KEY_CRAZY;
+      const hs = mode === 'classic' ? highScoreRef.current : mode === 'modern' ? modernHighScoreRef.current : crazyHighScoreRef.current;
+      if (g.score > hs) {
+        if (mode === 'classic') setHighScore(g.score);
+        else if (mode === 'modern') setModernHighScore(g.score);
+        else setCrazyHighScore(g.score);
+        localStorage.setItem(storageKey, g.score.toString());
+      }
+      submitScoreRef.current(g.score);
+      draw();
+    };
 
     // --- Crazy mode: chaos management ---
     if (isCrazy) {
@@ -1186,13 +1218,8 @@ const SnakeApp = () => {
           spawnEatParticles(scx, scy, '#a8a29e', '#78716c', 8);
           // Kill if stone lands directly on snake head
           if (head && stone.cell.x === head.x && stone.cell.y === head.y) {
-            g.running = false;
-            setGameState('over');
-            if (g.score > crazyHighScore) {
-              setCrazyHighScore(g.score);
-              localStorage.setItem(STORAGE_KEY_CRAZY, g.score.toString());
-            }
-            draw();
+            handleGameOver();
+            // Note: handleGameOver calls draw() internally
             return;
           }
         }
@@ -1201,7 +1228,7 @@ const SnakeApp = () => {
     }
 
     // Modern mode: powerup management
-    if (gameMode === 'modern') {
+    if (mode === 'modern') {
       g.powerups = g.powerups.filter(p => now - p.spawnTime < p.duration);
       g.activePowerups = g.activePowerups.filter(ap => ap.endTime > now);
       if (now - g.lastPowerupSpawn > 6000 + Math.random() * 4000 && g.powerups.length < 2) {
@@ -1233,8 +1260,8 @@ const SnakeApp = () => {
     if (g.dir === 'left') nx--;
     if (g.dir === 'right') nx++;
 
-    const isGhost = gameMode === 'modern' && hasPowerup('ghost');
-    const isShielded = gameMode === 'modern' && hasPowerup('shield');
+    const isGhost = mode === 'modern' && hasPowerup('ghost');
+    const isShielded = mode === 'modern' && hasPowerup('shield');
 
     // Wall collision
     if (nx < 0 || nx >= GRID_W || ny < 0 || ny >= GRID_H) {
@@ -1245,48 +1272,20 @@ const SnakeApp = () => {
         if (ny < 0) ny = GRID_H - 1;
         else if (ny >= GRID_H) ny = 0;
       } else {
-        g.running = false;
-        setGameState('over');
-        const storageKey = gameMode === 'classic' ? STORAGE_KEY_CLASSIC : gameMode === 'modern' ? STORAGE_KEY_MODERN : STORAGE_KEY_CRAZY;
-        const hs = gameMode === 'classic' ? highScore : gameMode === 'modern' ? modernHighScore : crazyHighScore;
-        if (g.score > hs) {
-          if (gameMode === 'classic') setHighScore(g.score);
-          else if (gameMode === 'modern') setModernHighScore(g.score);
-          else setCrazyHighScore(g.score);
-          localStorage.setItem(storageKey, g.score.toString());
-        }
-        // Auto-submit score to leaderboard
-        submitScoreToLeaderboard(g.score);
-        draw();
+        handleGameOver();
         return;
       }
     }
 
     // Crazy wall collision
     if (isCrazy && g.crazyWalls.some(w => w.x === nx && w.y === ny)) {
-      g.running = false;
-      setGameState('over');
-      if (g.score > crazyHighScore) {
-        setCrazyHighScore(g.score);
-        localStorage.setItem(STORAGE_KEY_CRAZY, g.score.toString());
-      }
-      // Auto-submit score to leaderboard
-      submitScoreToLeaderboard(g.score);
-      draw();
+      handleGameOver();
       return;
     }
 
     // Landed stone collision
     if (isCrazy && g.fallingStones.some(s => s.landed && s.cell.x === nx && s.cell.y === ny)) {
-      g.running = false;
-      setGameState('over');
-      if (g.score > crazyHighScore) {
-        setCrazyHighScore(g.score);
-        localStorage.setItem(STORAGE_KEY_CRAZY, g.score.toString());
-      }
-      // Auto-submit score to leaderboard
-      submitScoreToLeaderboard(g.score);
-      draw();
+      handleGameOver();
       return;
     }
 
@@ -1303,19 +1302,7 @@ const SnakeApp = () => {
       } else if (isGhost) {
         // Ghost passes through itself
       } else {
-        g.running = false;
-        setGameState('over');
-        const storageKey = gameMode === 'classic' ? STORAGE_KEY_CLASSIC : gameMode === 'modern' ? STORAGE_KEY_MODERN : STORAGE_KEY_CRAZY;
-        const hs = gameMode === 'classic' ? highScore : gameMode === 'modern' ? modernHighScore : crazyHighScore;
-        if (g.score > hs) {
-          if (gameMode === 'classic') setHighScore(g.score);
-          else if (gameMode === 'modern') setModernHighScore(g.score);
-          else setCrazyHighScore(g.score);
-          localStorage.setItem(storageKey, g.score.toString());
-        }
-        // Auto-submit score to leaderboard
-        submitScoreToLeaderboard(g.score);
-        draw();
+        handleGameOver();
         return;
       }
     }
@@ -1378,7 +1365,7 @@ const SnakeApp = () => {
     }
 
     // Powerup pickup (modern)
-    if (gameMode === 'modern') {
+    if (mode === 'modern') {
       g.powerups = g.powerups.filter(pu => {
         if (pu.cell.x === nx && pu.cell.y === ny) {
           const info = POWERUP_INFO[pu.type];
@@ -1395,7 +1382,7 @@ const SnakeApp = () => {
 
     // Speed calculation
     let speed = Math.max(MIN_TICK_MS, BASE_TICK_MS - (g.snake.length - 1) * 2);
-    if (gameMode === 'modern') {
+    if (mode === 'modern') {
       if (hasPowerup('speed')) speed = Math.max(35, speed * 0.6);
       if (hasPowerup('slow')) speed = Math.min(200, speed * 1.6);
     }
@@ -1405,7 +1392,7 @@ const SnakeApp = () => {
       speed = Math.max(40, speed * 0.85);
     }
     tickRef.current = setTimeout(tick, speed);
-  }, [draw, spawnFood, spawnPowerup, highScore, modernHighScore, crazyHighScore, gameMode, hasPowerup, hasChaos, spawnEatParticles, triggerChaos]);
+  }, [draw, spawnFood, spawnPowerup, setGameState, setHighScore, setModernHighScore, setCrazyHighScore, hasPowerup, hasChaos, spawnEatParticles, triggerChaos]);
 
   const renderLoop = useCallback(() => {
     const g = gameRef.current;
@@ -1445,7 +1432,8 @@ const SnakeApp = () => {
     tickRef.current = setTimeout(tick, BASE_TICK_MS);
     cancelAnimationFrame(renderRef.current);
     renderRef.current = requestAnimationFrame(renderLoop);
-  }, [tick, spawnFood, renderLoop]);
+  }, [tick, spawnFood, renderLoop, setGameState]);
+  startGameRef.current = startGame;
 
   // Keyboard
   useEffect(() => {
@@ -1453,8 +1441,8 @@ const SnakeApp = () => {
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space'].includes(e.code)) {
         e.preventDefault();
       }
-      if (gameState !== 'playing') {
-        if (e.code === 'Space' || e.code === 'Enter') startGame();
+      if (gameStateRef.current !== 'playing') {
+        if (e.code === 'Space' || e.code === 'Enter') startGameRef.current();
         return;
       }
       const keyMap: Record<string, Direction> = {
@@ -1468,17 +1456,17 @@ const SnakeApp = () => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [gameState, startGame]);
+  }, []);
 
   // Swipe
   useEffect(() => {
     if (!isMobile) return;
     const handleTouchStart = (e: TouchEvent) => {
-      if (gameState !== 'playing') return;
+      if (gameStateRef.current !== 'playing') return;
       touchStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
     };
     const handleTouchEnd = (e: TouchEvent) => {
-      if (!touchStart.current || gameState !== 'playing') return;
+      if (!touchStart.current || gameStateRef.current !== 'playing') return;
       const dx = e.changedTouches[0].clientX - touchStart.current.x;
       const dy = e.changedTouches[0].clientY - touchStart.current.y;
       touchStart.current = null;
@@ -1495,12 +1483,13 @@ const SnakeApp = () => {
       window.removeEventListener('touchstart', handleTouchStart);
       window.removeEventListener('touchend', handleTouchEnd);
     };
-  }, [isMobile, gameState]);
+  }, [isMobile]);
 
   // Cleanup
   useEffect(() => {
+    const game = gameRef.current;
     return () => {
-      gameRef.current.running = false;
+      game.running = false;
       if (tickRef.current) clearTimeout(tickRef.current);
       cancelAnimationFrame(renderRef.current);
     };
@@ -1689,12 +1678,13 @@ const SnakeApp = () => {
     }
 
     try {
-      await leaderboardApi.addEntry(name, finalScore, 'snake', gameMode);
-      console.log(`Score submitted to leaderboard: ${name} - ${finalScore} (${gameMode})`);
+      await leaderboardApi.addEntry(name, finalScore, 'snake', gameModeRef.current);
+      console.info(`Score submitted to leaderboard: ${name} - ${finalScore} (${gameModeRef.current})`);
     } catch (error) {
       console.error('Failed to submit score to leaderboard:', error);
     }
-  }, [gameMode]);
+  }, []);
+  submitScoreRef.current = submitScoreToLeaderboard;
 
   return (
     <div ref={containerRef} className="max-w-4xl mx-auto space-y-6">
