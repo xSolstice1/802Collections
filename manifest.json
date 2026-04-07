@@ -1,8 +1,8 @@
 {
-  "name": "802Collections",
-  "short_name": "802",
-  "description": "A modular web application platform",
-  "start_url": "/802Collections/",
+  "name": "Bird Shit Simulator",
+  "short_name": "Bird Shit",
+  "description": "Fly freely, poop on pedestrians, and dodge the hunters!",
+  "start_url": "/802Collections/#/bird-shit",
   "scope": "/802Collections/",
   "display": "standalone",
   "background_color": "#0a0b0e",
