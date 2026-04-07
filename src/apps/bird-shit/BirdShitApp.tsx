@@ -103,6 +103,10 @@ const BirdShitApp = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const frameRef = useRef<number>(0);
   const keysRef = useRef<Set<string>>(new Set());
+  const joystickBaseRef = useRef<HTMLDivElement>(null);
+  const joystickThumbRef = useRef<HTMLDivElement>(null);
+  const joystickTouchId = useRef<number | null>(null);
+  const joystickOrigin = useRef<{ x: number; y: number } | null>(null);
   const gameRef = useRef({
     running: false,
     birdX: 120,
@@ -138,6 +142,10 @@ const BirdShitApp = () => {
     const saved = localStorage.getItem(STORAGE_KEY);
     return saved ? parseInt(saved, 10) : 0;
   });
+  const [isPortrait, setIsPortrait] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [portraitDismissed, setPortraitDismissed] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   // Compute effective stats from upgrades
   const getPoopSpeed = useCallback((upgrades: Upgrades) => BASE_POOP_SPEED + upgrades.poopSpeed * 1.0, []);
@@ -768,6 +776,87 @@ const BirdShitApp = () => {
     }
   }, [getPoopW, getPoopH, getPoopSpeed]);
 
+  // --- Floating joystick handlers ---
+  const JOYSTICK_SIZE = 120;
+  const THUMB_SIZE = 50;
+  const MAX_DIST = (JOYSTICK_SIZE - THUMB_SIZE) / 2;
+  const DEAD_ZONE = 0.3;
+
+  const updateJoystickFromOrigin = useCallback((clientX: number, clientY: number) => {
+    const origin = joystickOrigin.current;
+    if (!origin) return;
+
+    let dx = clientX - origin.x;
+    let dy = clientY - origin.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    if (dist > MAX_DIST) {
+      dx = (dx / dist) * MAX_DIST;
+      dy = (dy / dist) * MAX_DIST;
+    }
+
+    if (joystickThumbRef.current) {
+      joystickThumbRef.current.style.transform = `translate(${dx}px, ${dy}px)`;
+    }
+
+    const threshold = MAX_DIST * DEAD_ZONE;
+    const keys = keysRef.current;
+    if (dx < -threshold) keys.add('ArrowLeft'); else keys.delete('ArrowLeft');
+    if (dx > threshold) keys.add('ArrowRight'); else keys.delete('ArrowRight');
+    if (dy < -threshold) keys.add('ArrowUp'); else keys.delete('ArrowUp');
+    if (dy > threshold) keys.add('ArrowDown'); else keys.delete('ArrowDown');
+  }, []);
+
+  const handleJoystickZoneStart = useCallback((e: React.TouchEvent) => {
+    e.preventDefault();
+    if (joystickTouchId.current !== null) return; // already tracking
+    const touch = e.changedTouches[0];
+    joystickTouchId.current = touch.identifier;
+    joystickOrigin.current = { x: touch.clientX, y: touch.clientY };
+
+    // Position the joystick base at the touch point
+    if (joystickBaseRef.current) {
+      joystickBaseRef.current.style.left = `${touch.clientX - JOYSTICK_SIZE / 2}px`;
+      joystickBaseRef.current.style.top = `${touch.clientY - JOYSTICK_SIZE / 2}px`;
+      joystickBaseRef.current.style.opacity = '1';
+    }
+    if (joystickThumbRef.current) {
+      joystickThumbRef.current.style.transform = 'translate(0px, 0px)';
+    }
+  }, []);
+
+  const handleJoystickZoneMove = useCallback((e: React.TouchEvent) => {
+    e.preventDefault();
+    if (joystickTouchId.current === null) return;
+    for (let i = 0; i < e.touches.length; i++) {
+      if (e.touches[i].identifier === joystickTouchId.current) {
+        updateJoystickFromOrigin(e.touches[i].clientX, e.touches[i].clientY);
+        return;
+      }
+    }
+  }, [updateJoystickFromOrigin]);
+
+  const handleJoystickZoneEnd = useCallback((e: React.TouchEvent) => {
+    e.preventDefault();
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      if (e.changedTouches[i].identifier === joystickTouchId.current) {
+        joystickTouchId.current = null;
+        joystickOrigin.current = null;
+        if (joystickBaseRef.current) {
+          joystickBaseRef.current.style.opacity = '0';
+        }
+        if (joystickThumbRef.current) {
+          joystickThumbRef.current.style.transform = 'translate(0px, 0px)';
+        }
+        keysRef.current.delete('ArrowLeft');
+        keysRef.current.delete('ArrowRight');
+        keysRef.current.delete('ArrowUp');
+        keysRef.current.delete('ArrowDown');
+        return;
+      }
+    }
+  }, []);
+
   // --- Upgrade screen drawing ---
   const drawUpgradeScreen = useCallback(() => {
     const canvas = canvasRef.current;
@@ -1278,6 +1367,65 @@ const BirdShitApp = () => {
     };
   }, []);
 
+  // Detect mobile + portrait orientation
+  useEffect(() => {
+    const checkMobileAndOrientation = () => {
+      const mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || window.innerWidth < 640;
+      setIsMobile(mobile);
+      if (mobile) {
+        const portrait = window.innerHeight > window.innerWidth;
+        setIsPortrait(portrait);
+        if (!portrait) setPortraitDismissed(false);
+      } else {
+        setIsPortrait(false);
+      }
+    };
+    checkMobileAndOrientation();
+    window.addEventListener('resize', checkMobileAndOrientation);
+    window.addEventListener('orientationchange', checkMobileAndOrientation);
+    return () => {
+      window.removeEventListener('resize', checkMobileAndOrientation);
+      window.removeEventListener('orientationchange', checkMobileAndOrientation);
+    };
+  }, []);
+
+  // Clear stuck controls when window loses focus or visibility changes
+  useEffect(() => {
+    const clearControls = () => {
+      keysRef.current.clear();
+      joystickTouchId.current = null;
+      joystickOrigin.current = null;
+      if (joystickBaseRef.current) joystickBaseRef.current.style.opacity = '0';
+      if (joystickThumbRef.current) joystickThumbRef.current.style.transform = 'translate(0px, 0px)';
+    };
+
+    // Also catch touchend/touchcancel at window level as a safety net
+    const handleGlobalTouchEnd = (e: TouchEvent) => {
+      if (joystickTouchId.current === null) return;
+      let found = false;
+      for (let i = 0; i < e.touches.length; i++) {
+        if (e.touches[i].identifier === joystickTouchId.current) {
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        clearControls();
+      }
+    };
+
+    window.addEventListener('blur', clearControls);
+    document.addEventListener('visibilitychange', clearControls);
+    window.addEventListener('touchend', handleGlobalTouchEnd);
+    window.addEventListener('touchcancel', handleGlobalTouchEnd);
+    return () => {
+      window.removeEventListener('blur', clearControls);
+      document.removeEventListener('visibilitychange', clearControls);
+      window.removeEventListener('touchend', handleGlobalTouchEnd);
+      window.removeEventListener('touchcancel', handleGlobalTouchEnd);
+    };
+  }, []);
+
   // Draw idle/game over/upgrade screens
   useEffect(() => {
     if (gameState === 'playing') return;
@@ -1337,17 +1485,47 @@ const BirdShitApp = () => {
     ctx.fillText('WASD / Arrows = Move  |  SPACE = Poop', CANVAS_W / 2, 320);
   }, [gameState, score, highScore, level, drawUpgradeScreen]);
 
-  // Handle canvas click for upgrade screen
-  const handleCanvasClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+  // Convert client coords to canvas coords, accounting for object-fit: contain
+  const clientToCanvas = useCallback((clientX: number, clientY: number): { x: number; y: number } | null => {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+
+    // Calculate the actual rendered size of the canvas content within the element
+    const elemAspect = rect.width / rect.height;
+    const canvasAspect = CANVAS_W / CANVAS_H;
+    let renderW: number, renderH: number, offsetX: number, offsetY: number;
+
+    if (elemAspect > canvasAspect) {
+      // Letterboxed horizontally (black bars on sides)
+      renderH = rect.height;
+      renderW = rect.height * canvasAspect;
+      offsetX = (rect.width - renderW) / 2;
+      offsetY = 0;
+    } else {
+      // Letterboxed vertically (black bars on top/bottom)
+      renderW = rect.width;
+      renderH = rect.width / canvasAspect;
+      offsetX = 0;
+      offsetY = (rect.height - renderH) / 2;
+    }
+
+    const localX = clientX - rect.left - offsetX;
+    const localY = clientY - rect.top - offsetY;
+
+    if (localX < 0 || localX > renderW || localY < 0 || localY > renderH) return null;
+
+    return {
+      x: (localX / renderW) * CANVAS_W,
+      y: (localY / renderH) * CANVAS_H,
+    };
+  }, []);
+
+  // Handle canvas interaction (click or touch) for upgrade screen + other states
+  const handleCanvasInteraction = useCallback((clientX: number, clientY: number) => {
     if (gameState === 'upgrading') {
-      // Check if clicking on an upgrade box
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const rect = canvas.getBoundingClientRect();
-      const scaleX = CANVAS_W / rect.width;
-      const scaleY = CANVAS_H / rect.height;
-      const mx = (e.clientX - rect.left) * scaleX;
-      const my = (e.clientY - rect.top) * scaleY;
+      const pos = clientToCanvas(clientX, clientY);
+      if (!pos) return;
 
       const startX = 50;
       const startY = 100;
@@ -1362,157 +1540,273 @@ const BirdShitApp = () => {
         const boxW = colW - 20;
         const boxH = rowH - 12;
 
-        if (mx >= x && mx <= x + boxW && my >= y && my <= y + boxH) {
+        if (pos.x >= x && pos.x <= x + boxW && pos.y >= y && pos.y <= y + boxH) {
           buyUpgrade(i);
           return;
         }
       }
-
       return;
     }
 
     if (gameState === 'playing') dropPoop();
     else startGame();
-  }, [gameState, dropPoop, startGame, buyUpgrade, continueFromUpgrade]);
+  }, [gameState, dropPoop, startGame, buyUpgrade, clientToCanvas]);
+
+  const handleCanvasClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    handleCanvasInteraction(e.clientX, e.clientY);
+  }, [handleCanvasInteraction]);
+
+  const handleCanvasTouchStart = useCallback((e: React.TouchEvent<HTMLCanvasElement>) => {
+    // Only handle touch for non-playing states (during play, overlay handles input)
+    if (gameState === 'playing') return;
+    e.preventDefault();
+    const touch = e.changedTouches[0];
+    handleCanvasInteraction(touch.clientX, touch.clientY);
+  }, [gameState, handleCanvasInteraction]);
+
+  // Whether we're in mobile gameplay mode (fullscreen overlay)
+  const mobilePlay = isMobile && gameState !== 'idle';
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <div className="p-2 bg-802/10 rounded-lg">
-          <Bird className="w-6 h-6 text-802" />
-        </div>
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold text-white">Bird Shit Simulator</h1>
-          <p className="text-sm text-gray-400">
-            Fly freely, poop on pedestrians, and dodge the hunters!
+    <div
+      ref={containerRef}
+      className={mobilePlay
+        ? 'fixed inset-0 z-40 bg-black'
+        : 'max-w-4xl mx-auto space-y-6'
+      }
+      style={mobilePlay ? { height: '100dvh', width: '100dvw' } : undefined}
+    >
+      {/* Portrait orientation overlay */}
+      {isPortrait && gameState !== 'idle' && !portraitDismissed && (
+        <div
+          className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4"
+          style={{ background: 'rgba(10, 10, 14, 0.92)' }}
+        >
+          <div className="text-6xl" style={{ animation: 'bss-rotate 2s ease-in-out infinite' }}>
+            📱
+          </div>
+          <p className="text-lg font-bold text-white">Rotate your device</p>
+          <p className="text-sm text-gray-400 text-center px-8">
+            Bird Shit Simulator plays best in landscape mode
           </p>
+          <button
+            onClick={() => setPortraitDismissed(true)}
+            className="mt-2 px-5 py-2 text-sm text-gray-300 border border-gray-600 rounded-lg active:bg-gray-800"
+          >
+            Continue anyway
+          </button>
+          <style>{`
+            @keyframes bss-rotate {
+              0%, 100% { transform: rotate(0deg); }
+              50% { transform: rotate(90deg); }
+            }
+          `}</style>
         </div>
-        <div className="text-right">
-          <p className="text-xs text-gray-500">High Score</p>
-          <p className="text-lg font-mono font-bold text-802">{highScore}</p>
-        </div>
-      </div>
+      )}
 
-      {/* Game Canvas */}
-      <div className="card p-4 flex flex-col items-center">
+      {/* Header - hidden on mobile gameplay */}
+      {!mobilePlay && (
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-802/10 rounded-lg">
+            <Bird className="w-6 h-6 text-802" />
+          </div>
+          <div className="flex-1">
+            <h1 className="text-2xl font-bold text-white">Bird Shit Simulator</h1>
+            <p className="text-sm text-gray-400">
+              Fly freely, poop on pedestrians, and dodge the hunters!
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-xs text-gray-500">High Score</p>
+            <p className="text-lg font-mono font-bold text-802">{highScore}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Game area */}
+      <div className={mobilePlay
+        ? 'relative w-full h-full'
+        : 'card p-4 flex flex-col items-center'
+      }>
+        {/* Canvas - fills entire screen on mobile */}
         <canvas
           ref={canvasRef}
           width={CANVAS_W}
           height={CANVAS_H}
-          className="rounded-lg border border-gray-800 w-full"
-          style={{ maxWidth: CANVAS_W, imageRendering: 'pixelated' }}
+          className={mobilePlay ? '' : 'rounded-lg border border-gray-800 w-full'}
+          style={mobilePlay
+            ? { width: '100dvw', height: '100dvh', objectFit: 'contain', background: '#000', imageRendering: 'pixelated', touchAction: 'none', userSelect: 'none', WebkitTouchCallout: 'none' } as React.CSSProperties
+            : { maxWidth: CANVAS_W, imageRendering: 'pixelated', touchAction: 'none', userSelect: 'none', WebkitTouchCallout: 'none' } as React.CSSProperties
+          }
           onClick={handleCanvasClick}
+          onTouchStart={handleCanvasTouchStart}
+          onContextMenu={(e) => e.preventDefault()}
         />
 
-        {/* Mobile Controls */}
-        {gameState === 'playing' && (
-          <div className="grid grid-cols-3 gap-2 mt-4 sm:hidden w-full max-w-xs">
-            <div />
-            <button
-              onTouchStart={(e) => { e.preventDefault(); keysRef.current.add('ArrowUp'); }}
-              onTouchEnd={() => keysRef.current.delete('ArrowUp')}
-              className="btn-secondary py-3 text-lg"
+        {/* === Mobile overlay controls === */}
+        {gameState === 'playing' && mobilePlay && (
+          <>
+            {/* Left half: joystick touch zone */}
+            <div
+              className="absolute top-0 left-0"
+              style={{
+                width: '50%', height: '100%',
+                touchAction: 'none', userSelect: 'none', WebkitTouchCallout: 'none',
+              } as React.CSSProperties}
+              onTouchStart={handleJoystickZoneStart}
+              onTouchMove={handleJoystickZoneMove}
+              onTouchEnd={handleJoystickZoneEnd}
+              onTouchCancel={handleJoystickZoneEnd}
+              onContextMenu={(e) => e.preventDefault()}
+            />
+
+            {/* Floating joystick base (positioned dynamically via ref) */}
+            <div
+              ref={joystickBaseRef}
+              className="fixed pointer-events-none flex items-center justify-center"
+              style={{
+                width: JOYSTICK_SIZE,
+                height: JOYSTICK_SIZE,
+                borderRadius: '50%',
+                background: 'radial-gradient(circle, rgba(68,214,44,0.12) 0%, rgba(68,214,44,0.04) 70%, transparent 100%)',
+                border: '2px solid rgba(68,214,44,0.3)',
+                opacity: 0,
+                transition: 'opacity 0.1s',
+              }}
             >
-              Up
-            </button>
-            <div />
-            <button
-              onTouchStart={(e) => { e.preventDefault(); keysRef.current.add('ArrowLeft'); }}
-              onTouchEnd={() => keysRef.current.delete('ArrowLeft')}
-              className="btn-secondary py-3 text-lg"
-            >
-              Left
-            </button>
-            <button
+              {/* Crosshair lines */}
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div style={{ width: '40%', height: 1, background: 'rgba(68,214,44,0.15)' }} />
+              </div>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div style={{ width: 1, height: '40%', background: 'rgba(68,214,44,0.15)' }} />
+              </div>
+              {/* Thumb */}
+              <div
+                ref={joystickThumbRef}
+                style={{
+                  width: THUMB_SIZE,
+                  height: THUMB_SIZE,
+                  borderRadius: '50%',
+                  background: 'radial-gradient(circle at 40% 38%, rgba(68,214,44,0.6), rgba(68,214,44,0.25))',
+                  border: '2px solid rgba(68,214,44,0.7)',
+                  boxShadow: '0 0 12px rgba(68,214,44,0.2)',
+                }}
+              />
+            </div>
+
+            {/* Right side: Poop button */}
+            <div
               onTouchStart={(e) => { e.preventDefault(); dropPoop(); }}
-              className="btn-primary py-3 text-lg"
+              onContextMenu={(e) => e.preventDefault()}
+              className="absolute flex items-center justify-center active:scale-90"
+              style={{
+                right: '5dvw',
+                bottom: '5dvh',
+                width: '20dvh',
+                height: '20dvh',
+                maxWidth: 100,
+                maxHeight: 100,
+                borderRadius: '50%',
+                background: 'radial-gradient(circle at 40% 38%, rgba(133,77,14,0.85), rgba(107,58,10,0.85))',
+                border: '3px solid rgba(161,98,7,0.7)',
+                boxShadow: '0 0 20px rgba(133,77,14,0.3), inset 0 -3px 6px rgba(0,0,0,0.3)',
+                touchAction: 'none',
+                userSelect: 'none',
+                WebkitTouchCallout: 'none',
+              } as React.CSSProperties}
             >
-              Poop
-            </button>
-            <button
-              onTouchStart={(e) => { e.preventDefault(); keysRef.current.add('ArrowRight'); }}
-              onTouchEnd={() => keysRef.current.delete('ArrowRight')}
-              className="btn-secondary py-3 text-lg"
-            >
-              Right
-            </button>
-            <div />
-            <button
-              onTouchStart={(e) => { e.preventDefault(); keysRef.current.add('ArrowDown'); }}
-              onTouchEnd={() => keysRef.current.delete('ArrowDown')}
-              className="btn-secondary py-3 text-lg"
-            >
-              Down
-            </button>
-            <div />
+              <span className="text-3xl select-none" style={{ lineHeight: 1 }}>💩</span>
+            </div>
+          </>
+        )}
+
+        {/* Mobile: overlay buttons for non-playing states */}
+        {mobilePlay && gameState !== 'playing' && (
+          <div className="absolute inset-0 flex items-end justify-center pb-8 pointer-events-none">
+            {gameState === 'over' && (
+              <button onClick={startGame} className="btn-primary flex items-center gap-2 px-6 py-3 text-lg pointer-events-auto">
+                <Play className="w-5 h-5" />
+                Play Again
+              </button>
+            )}
+            {gameState === 'upgrading' && (
+              <button onClick={continueFromUpgrade} className="btn-primary flex items-center gap-2 px-6 py-3 text-lg pointer-events-auto">
+                <Play className="w-5 h-5" />
+                Continue to Level {level}
+              </button>
+            )}
           </div>
         )}
 
-        {/* Controls bar */}
-        <div className="flex items-center gap-4 mt-4">
-          {gameState === 'idle' && (
-            <button onClick={startGame} className="btn-primary flex items-center gap-2 px-6 py-2">
-              <Play className="w-4 h-4" />
-              Start Game
-            </button>
-          )}
-          {gameState === 'over' && (
-            <button onClick={startGame} className="btn-primary flex items-center gap-2 px-6 py-2">
-              <Play className="w-4 h-4" />
-              Play Again
-            </button>
-          )}
-          {gameState === 'upgrading' && (
-            <button onClick={continueFromUpgrade} className="btn-primary flex items-center gap-2 px-6 py-2">
-              <Play className="w-4 h-4" />
-              Continue to Level {level}
-            </button>
-          )}
-          {gameState === 'playing' && (
-            <div className="flex items-center gap-6">
-              <p className="text-sm text-gray-500 font-mono">
-                Score: <span className="text-802 font-bold">{score}</span>
-              </p>
-              <p className="text-sm text-gray-500 font-mono">
-                Level: <span className="text-yellow-400 font-bold">{level}</span>
-              </p>
-              <p className="text-sm text-gray-500 font-mono">
-                Lives: <span className="text-red-400 font-bold">{lives}</span>
-              </p>
-              <p className="text-sm text-gray-500 font-mono">
-                Coins: <span className="text-yellow-400 font-bold">{coins}</span>
-              </p>
-            </div>
-          )}
-        </div>
+        {/* Desktop controls bar */}
+        {!mobilePlay && (
+          <div className="flex items-center gap-4 mt-4">
+            {gameState === 'idle' && (
+              <button onClick={startGame} className="btn-primary flex items-center gap-2 px-6 py-2">
+                <Play className="w-4 h-4" />
+                Start Game
+              </button>
+            )}
+            {gameState === 'over' && (
+              <button onClick={startGame} className="btn-primary flex items-center gap-2 px-6 py-2">
+                <Play className="w-4 h-4" />
+                Play Again
+              </button>
+            )}
+            {gameState === 'upgrading' && (
+              <button onClick={continueFromUpgrade} className="btn-primary flex items-center gap-2 px-6 py-2">
+                <Play className="w-4 h-4" />
+                Continue to Level {level}
+              </button>
+            )}
+            {gameState === 'playing' && (
+              <div className="flex items-center gap-6">
+                <p className="text-sm text-gray-500 font-mono">
+                  Score: <span className="text-802 font-bold">{score}</span>
+                </p>
+                <p className="text-sm text-gray-500 font-mono">
+                  Level: <span className="text-yellow-400 font-bold">{level}</span>
+                </p>
+                <p className="text-sm text-gray-500 font-mono">
+                  Lives: <span className="text-red-400 font-bold">{lives}</span>
+                </p>
+                <p className="text-sm text-gray-500 font-mono">
+                  Coins: <span className="text-yellow-400 font-bold">{coins}</span>
+                </p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Instructions */}
-      <div className="card p-4">
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 text-center text-sm">
-          <div>
-            <kbd className="px-2 py-1 bg-gray-800 rounded text-802 font-mono text-xs">WASD / Arrows</kbd>
-            <p className="text-gray-500 mt-1">Move freely</p>
-          </div>
-          <div>
-            <kbd className="px-2 py-1 bg-gray-800 rounded text-802 font-mono text-xs">SPACE</kbd>
-            <p className="text-gray-500 mt-1">Drop poop</p>
-          </div>
-          <div>
-            <span className="text-802 font-bold">+10</span> / <span className="text-802 font-bold">+25</span>
-            <p className="text-gray-500 mt-1">Pedestrian / Hunter</p>
-          </div>
-          <div>
-            <span className="text-red-400 font-bold">3 Lives</span>
-            <p className="text-gray-500 mt-1">Dodge hunter bullets!</p>
-          </div>
-          <div>
-            <span className="text-yellow-400 font-bold">Upgrades</span>
-            <p className="text-gray-500 mt-1">Level up to upgrade!</p>
+      {/* Instructions - desktop only */}
+      {!mobilePlay && (
+        <div className="card p-4">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 text-center text-sm">
+            <div>
+              <kbd className="px-2 py-1 bg-gray-800 rounded text-802 font-mono text-xs">WASD / Arrows</kbd>
+              <p className="text-gray-500 mt-1">Move freely</p>
+            </div>
+            <div>
+              <kbd className="px-2 py-1 bg-gray-800 rounded text-802 font-mono text-xs">SPACE</kbd>
+              <p className="text-gray-500 mt-1">Drop poop</p>
+            </div>
+            <div>
+              <span className="text-802 font-bold">+10</span> / <span className="text-802 font-bold">+25</span>
+              <p className="text-gray-500 mt-1">Pedestrian / Hunter</p>
+            </div>
+            <div>
+              <span className="text-red-400 font-bold">3 Lives</span>
+              <p className="text-gray-500 mt-1">Dodge hunter bullets!</p>
+            </div>
+            <div>
+              <span className="text-yellow-400 font-bold">Upgrades</span>
+              <p className="text-gray-500 mt-1">Level up to upgrade!</p>
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };
