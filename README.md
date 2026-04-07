@@ -2,19 +2,21 @@
 
 A modular web application platform that hosts multiple tools and utilities in one unified interface. Built with React, TypeScript, Vite, and Tailwind CSS.
 
-![802Collections](https://img.shields.io/badge/version-1.0.0-76B900?style=for-the-badge)
-![License](https://img.shields.io/badge/license-MIT-76B900?style=for-the-badge)
+![802Collections](https://img.shields.io/badge/version-1.0.0-44D62C?style=for-the-badge)
+![License](https://img.shields.io/badge/license-MIT-44D62C?style=for-the-badge)
 
 ## ✨ Features
 
 - **Modular Architecture** - Easy to add new apps/modules to the platform
 - **App Registry System** - Centralized registration and management of applications
 - **Lazy Loading** - Each app is lazy-loaded for optimal performance
-- **Dark Mode Theme** - Modern dark theme with green accent
+- **Dark Mode Theme** - Modern dark theme with green accent (#44D62C)
 - **TypeScript** - Full type safety with strict TypeScript configuration
 - **Responsive Design** - Works on desktop, tablet, and mobile devices
+- **Sliding Navigation** - Infinite horizontal scrollable navbar for easy app access
 - **State Management** - Zustand for lightweight and efficient state management
 - **Error Boundaries** - Graceful error handling with recovery options
+- **Web Audio** - Sound effects for interactive elements (e.g., wheel spinning)
 
 ## 🚀 Quick Start
 
@@ -57,9 +59,20 @@ npm run preview
 │   │   ├── json-formatter/# JSON Formatter utility
 │   │   ├── sticker-maker/ # Telegram Sticker Maker
 │   │   ├── wheel-of-lunch/# Wheel of Lunch decision maker
+│   │   ├── resume-builder/# Resume Builder
+│   │   ├── payday-countdown/# Payday Countdown widget
+│   │   ├── when-panggang/ # When Panggang? utility
+│   │   ├── bird-shit/     # Bird Shit Simulator game
 │   │   └── index.ts       # App registry configuration
+│   ├── apps/              # Application modules
 │   ├── components/        # Reusable UI components
-│   │   ├── layout/        # Layout components (Sidebar, Header, MainLayout)
+│   │   ├── layout/        # Layout components
+│   │   │   ├── MainLayout.tsx
+│   │   │   ├── Header.tsx
+│   │   │   ├── Sidebar.tsx
+│   │   │   └── SlidingNavbar.tsx
+│   │   ├── widgets/       # Reusable widgets
+│   │   │   └── PaydayCountdownWidget.tsx
 │   │   ├── ErrorBoundary.tsx
 │   │   └── LoadingSpinner.tsx
 │   ├── core/              # Core framework code
@@ -75,7 +88,7 @@ npm run preview
 │   ├── model/             # TypeScript type definitions and models
 │   ├── App.tsx            # Main application component
 │   └── main.tsx           # Application entry point
-├── index.html             # HTML template
+├── index.html             # HTML template with inline favicon
 ├── tailwind.config.js     # Tailwind CSS configuration
 ├── tsconfig.json          # TypeScript configuration
 └── vite.config.ts         # Vite build configuration
@@ -89,7 +102,7 @@ The application uses a dark theme with Pantone 802C green as the primary accent:
 
 | Color | Hex | Usage |
 |-------|-----|-------|
-| Primary | `#76B900` | Buttons, links, accents |
+| Primary | `#44D62C` | Buttons, links, accents |
 | Background | `#0a0b0e` | Main background |
 | Surface | `#121418` | Cards, panels |
 | Border | `#343a40` | Borders, dividers |
@@ -168,6 +181,7 @@ That's it! Your app will automatically appear in the sidebar and dashboard.
 | Zustand | State management |
 | Tailwind CSS | Styling |
 | Lucide React | Icons |
+| Web Audio API | Sound effects |
 
 ## 🎯 Available Apps
 
@@ -202,8 +216,52 @@ A fun decision-making tool that randomly selects a lunch option from your predef
 **Features:**
 - Add, edit, and remove lunch options
 - Spin the wheel to randomly select an option
-- Customizable options list
-- Fun animations and visual feedback
+- Weighted probability (higher weight = bigger slice = more likely to win)
+- Sound effects during spinning (click sounds that slow down as wheel decelerates)
+- Celebration sound and speech synthesis for winner announcement
+- Customizable colors and weights
+- Options saved to localStorage
+
+### Resume Builder
+Create ATS-friendly resumes with multiple templates. Export to PDF or DOCX format.
+
+### Payday Countdown
+A persistent widget that counts down to the next payday (27th of each month, adjusted to Friday if it falls on a weekend).
+
+**Features:**
+- Real-time countdown display (days, hours, minutes, seconds)
+- Progress bar showing time elapsed since last payday
+- Upcoming paydays schedule
+- Confetti animation on payday
+- Compact widget in header, expanded view in sidebar
+
+### When Panggang?
+Find out when you can finally leave the office! A fun countdown to end of work day.
+
+### Bird Shit Simulator
+A casual game where you fly as a bird and score points by... well, you know! 
+
+## 🎮 UI/UX Features
+
+### Sliding Navbar
+- Horizontal scrollable navigation that scales infinitely
+- Arrow buttons appear on hover (desktop) for easy scrolling
+- Touch swipe support for mobile devices
+- Mouse wheel horizontal scrolling
+- Auto-hiding arrows at scroll boundaries
+- Gradient overlays for visual scroll indication
+
+### Responsive Sidebar
+- Collapsible sidebar with smooth animations
+- Mobile-friendly drawer with overlay
+- Expanded payday countdown widget
+- GitHub link in footer
+- App list with active state highlighting
+
+### Persistent Widgets
+- Payday countdown always visible in sidebar
+- Click widget to navigate to full countdown page
+- Real-time updates without page refresh
 
 ## 📦 Available Scripts
 
@@ -224,6 +282,8 @@ A fun decision-making tool that randomly selects a lunch option from your predef
 - [ ] **App Store** - Browse and install community apps
 - [ ] **Offline Support** - PWA capabilities with service workers
 - [ ] **Analytics Dashboard** - Track app usage and performance
+- [ ] **More Sound Effects** - Additional audio feedback for interactions
+- [ ] **Customizable Themes** - User-selectable color schemes
 
 ## 📄 License
 

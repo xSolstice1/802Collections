@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom';
 import { 
   X,
   Grid3X3,
-  Box,
+  Gamepad2,
   Github
 } from 'lucide-react';
 import { PaydayCountdownWidget } from '@components/widgets/PaydayCountdownWidget';
@@ -53,9 +53,9 @@ export const Sidebar = ({ apps, isOpen, onClose }: SidebarProps) => {
       >
         {/* Header with close button (mobile only) */}
         <div className="flex items-center justify-between p-4 border-b border-black-700">
-          <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-802 flex items-center justify-center">
-              <Box className="w-5 h-5 text-black" />
+              <Gamepad2 className="w-5 h-5 text-black" />
             </div>
             <span className="font-semibold text-black-100 text-sm">802Collections</span>
           </div>
