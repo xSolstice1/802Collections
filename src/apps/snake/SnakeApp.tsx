@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Ribbon, Play, Maximize, Minimize, Zap, Shield, Clock, Star, Ghost, Flame } from 'lucide-react';
+import { Ribbon, Play, Maximize, Minimize, Zap, Shield, Clock, Star, Ghost, Flame, Trophy, X } from 'lucide-react';
+import { GameLeaderboard } from '@components/leaderboard';
+import { leaderboardApi } from '@services/leaderboardApi';
 
 // --- Game Constants ---
 const CANVAS_W = 600;
@@ -137,6 +139,14 @@ const SnakeApp = () => {
   });
   const [isMobile, setIsMobile] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [playerName, setPlayerName] = useState(() => {
+    // Try to get player name from localStorage
+    const saved = localStorage.getItem('snake-player-name');
+    return saved || '';
+  });
+  const playerNameRef = useRef(playerName);
+  playerNameRef.current = playerName;
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
 
   const currentHighScore = gameMode === 'classic' ? highScore : gameMode === 'modern' ? modernHighScore : crazyHighScore;
 
@@ -1245,6 +1255,8 @@ const SnakeApp = () => {
           else setCrazyHighScore(g.score);
           localStorage.setItem(storageKey, g.score.toString());
         }
+        // Auto-submit score to leaderboard
+        submitScoreToLeaderboard(g.score);
         draw();
         return;
       }
@@ -1258,6 +1270,8 @@ const SnakeApp = () => {
         setCrazyHighScore(g.score);
         localStorage.setItem(STORAGE_KEY_CRAZY, g.score.toString());
       }
+      // Auto-submit score to leaderboard
+      submitScoreToLeaderboard(g.score);
       draw();
       return;
     }
@@ -1270,6 +1284,8 @@ const SnakeApp = () => {
         setCrazyHighScore(g.score);
         localStorage.setItem(STORAGE_KEY_CRAZY, g.score.toString());
       }
+      // Auto-submit score to leaderboard
+      submitScoreToLeaderboard(g.score);
       draw();
       return;
     }
@@ -1297,6 +1313,8 @@ const SnakeApp = () => {
           else setCrazyHighScore(g.score);
           localStorage.setItem(storageKey, g.score.toString());
         }
+        // Auto-submit score to leaderboard
+        submitScoreToLeaderboard(g.score);
         draw();
         return;
       }
@@ -1656,6 +1674,28 @@ const SnakeApp = () => {
     if (gameState !== 'playing') { e.preventDefault(); startGame(); }
   }, [gameState, startGame]);
 
+  // --- Auto-submit score to leaderboard ---
+  const submitScoreToLeaderboard = useCallback(async (finalScore: number) => {
+    // Only submit if score is greater than 0
+    if (finalScore <= 0) return;
+
+    // Get the latest player name from ref
+    let name = playerNameRef.current;
+    if (!name) {
+      // Generate a random name like "Player_1234"
+      name = `Player_${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`;
+      setPlayerName(name);
+      localStorage.setItem('snake-player-name', name);
+    }
+
+    try {
+      await leaderboardApi.addEntry(name, finalScore, 'snake', gameMode);
+      console.log(`Score submitted to leaderboard: ${name} - ${finalScore} (${gameMode})`);
+    } catch (error) {
+      console.error('Failed to submit score to leaderboard:', error);
+    }
+  }, [gameMode]);
+
   return (
     <div ref={containerRef} className="max-w-4xl mx-auto space-y-6">
       {/* Header */}
@@ -1750,6 +1790,82 @@ const SnakeApp = () => {
           )}
         </div>
       </div>
+
+      {/* Player name input - always visible */}
+      <div className="card p-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-yellow-500/10 rounded-lg">
+            <span className="text-xl">👤</span>
+          </div>
+          <div className="flex-1">
+            <label className="text-xs text-gray-400 block mb-1">Player Name</label>
+            <input
+              type="text"
+              value={playerName}
+              onChange={(e) => {
+                const newName = e.target.value.slice(0, 50);
+                setPlayerName(newName);
+                localStorage.setItem('snake-player-name', newName);
+              }}
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => {
+                // Stop event propagation so game controls don't intercept
+                e.stopPropagation();
+              }}
+              placeholder="Enter your name..."
+              maxLength={50}
+              className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white text-sm focus:outline-none focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500"
+            />
+          </div>
+          {playerName && (
+            <button
+              onClick={() => {
+                setPlayerName('');
+                localStorage.removeItem('snake-player-name');
+              }}
+              className="p-2 text-gray-400 hover:text-white rounded-lg transition-colors"
+              title="Clear name"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+        <p className="text-xs text-gray-500 mt-2">Your name will be used for the leaderboard</p>
+      </div>
+
+      {/* Leaderboard button */}
+      <div className="card p-4 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Trophy className="w-5 h-5 text-yellow-500" />
+          <span className="text-white font-medium">Leaderboard</span>
+        </div>
+        <button
+          onClick={() => setShowLeaderboard(true)}
+          className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white text-sm font-medium rounded transition-colors flex items-center gap-2"
+        >
+          <Trophy className="w-4 h-4" />
+          View Scores
+        </button>
+      </div>
+
+      {/* Leaderboard Modal */}
+      {showLeaderboard && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => setShowLeaderboard(false)}>
+          <div className="relative" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => setShowLeaderboard(false)}
+              className="absolute -top-12 right-0 p-2 text-gray-400 hover:text-white rounded-lg transition-colors"
+            >
+              <X className="w-6 h-6" />
+            </button>
+            <GameLeaderboard 
+              game="snake" 
+              mode={gameMode} 
+              title={`Snake - ${gameMode.charAt(0).toUpperCase() + gameMode.slice(1)}`}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Instructions */}
       <div className="card p-4">

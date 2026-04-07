@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Bird, Play, Maximize, Minimize } from 'lucide-react';
+import { Bird, Play, Maximize, Minimize, Trophy, X } from 'lucide-react';
+import { GameLeaderboard } from '@components/leaderboard';
+import { leaderboardApi } from '@services/leaderboardApi';
 
 // --- Game Constants ---
 const CANVAS_W = 800;
@@ -147,6 +149,14 @@ const BirdShitApp = () => {
   const [portraitDismissed, setPortraitDismissed] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [playerName, setPlayerName] = useState(() => {
+    // Try to get player name from localStorage
+    const saved = localStorage.getItem('birdshit-player-name');
+    return saved || '';
+  });
+  const playerNameRef = useRef(playerName);
+  playerNameRef.current = playerName;
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
 
   // Compute effective stats from upgrades
   const getPoopSpeed = useCallback((upgrades: Upgrades) => BASE_POOP_SPEED + upgrades.poopSpeed * 1.0, []);
@@ -1142,6 +1152,8 @@ const BirdShitApp = () => {
             setHighScore(g.score);
             localStorage.setItem(STORAGE_KEY, g.score.toString());
           }
+          // Submit score to leaderboard
+          submitScoreToLeaderboard(g.score);
         }
         return false;
       }
@@ -1291,6 +1303,29 @@ const BirdShitApp = () => {
     setGameState('playing');
     frameRef.current = requestAnimationFrame(gameLoop);
   }, [gameLoop]);
+
+  // --- Auto-submit score to leaderboard ---
+  const submitScoreToLeaderboard = useCallback(async (finalScore: number) => {
+    // Only submit if score is greater than 0
+    if (finalScore <= 0) return;
+
+    // Get the latest player name from ref
+    let name = playerNameRef.current;
+    if (!name) {
+      // Generate a random name like "Player_1234"
+      name = `Player_${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`;
+      setPlayerName(name);
+      localStorage.setItem('birdshit-player-name', name);
+    }
+
+    try {
+      console.log('Submitting Bird Shit score:', { name, score: finalScore, game: 'bird-shit' });
+      await leaderboardApi.addEntry(name, finalScore, 'bird-shit');
+      console.log('Score submitted successfully');
+    } catch (error) {
+      console.error('Failed to submit score to leaderboard:', error);
+    }
+  }, []);
 
   const startGame = useCallback(() => {
     const g = gameRef.current;
@@ -1589,14 +1624,10 @@ const BirdShitApp = () => {
   return (
     <div
       ref={containerRef}
-      className={mobilePlay
-        ? 'fixed inset-0 z-40 bg-black'
-        : 'max-w-4xl mx-auto space-y-6'
-      }
-      style={mobilePlay ? { height: '100dvh', width: '100dvw' } : undefined}
+      className="max-w-4xl mx-auto space-y-6"
     >
-      {/* Portrait orientation overlay */}
-      {isPortrait && gameState !== 'idle' && !portraitDismissed && (
+      {/* Portrait orientation overlay - only show in mobile gameplay mode */}
+      {mobilePlay && isPortrait && !portraitDismissed && (
         <div
           className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4"
           style={{ background: 'rgba(10, 10, 14, 0.92)' }}
@@ -1816,6 +1847,81 @@ const BirdShitApp = () => {
           </div>
         )}
       </div>
+
+      {/* Player name input - always visible */}
+      <div className="card p-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-yellow-500/10 rounded-lg">
+            <span className="text-xl">👤</span>
+          </div>
+          <div className="flex-1">
+            <label className="text-xs text-gray-400 block mb-1">Player Name</label>
+            <input
+              type="text"
+              value={playerName}
+              onChange={(e) => {
+                const newName = e.target.value.slice(0, 50);
+                setPlayerName(newName);
+                localStorage.setItem('birdshit-player-name', newName);
+              }}
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => {
+                // Stop event propagation so game controls don't intercept
+                e.stopPropagation();
+              }}
+              placeholder="Enter your name..."
+              maxLength={50}
+              className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white text-sm focus:outline-none focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500"
+            />
+          </div>
+          {playerName && (
+            <button
+              onClick={() => {
+                setPlayerName('');
+                localStorage.removeItem('birdshit-player-name');
+              }}
+              className="p-2 text-gray-400 hover:text-white rounded-lg transition-colors"
+              title="Clear name"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+        <p className="text-xs text-gray-500 mt-2">Your name will be used for the leaderboard</p>
+      </div>
+
+      {/* Leaderboard button */}
+      <div className="card p-4 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Trophy className="w-5 h-5 text-yellow-500" />
+          <span className="text-white font-medium">Leaderboard</span>
+        </div>
+        <button
+          onClick={() => setShowLeaderboard(true)}
+          className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white text-sm font-medium rounded transition-colors flex items-center gap-2"
+        >
+          <Trophy className="w-4 h-4" />
+          View Scores
+        </button>
+      </div>
+
+      {/* Leaderboard Modal */}
+      {showLeaderboard && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => setShowLeaderboard(false)}>
+          <div className="relative" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => setShowLeaderboard(false)}
+              className="absolute -top-12 right-0 p-2 text-gray-400 hover:text-white rounded-lg transition-colors"
+            >
+              <X className="w-6 h-6" />
+            </button>
+            <GameLeaderboard 
+              game="bird-shit" 
+              title="Bird Shit - High Scores"
+            />
+          </div>
+        </div>
+      )}
 
       {/* Instructions - desktop only */}
       {!mobilePlay && (
