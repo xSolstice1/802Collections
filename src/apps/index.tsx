@@ -7,7 +7,8 @@ import {
   FileText,
   Flame,
   Bird,
-  DollarSign
+  DollarSign,
+  Ribbon
 } from 'lucide-react';
 import { appRegistry } from '@core/registry/appRegistry';
 import type { AppDefinition } from '@model/index';
@@ -31,6 +32,7 @@ const ResumeBuilderApp = lazy(() => import('@apps/resume-builder/ResumeBuilderAp
 const WhenPanggangApp = lazy(() => import('@apps/when-panggang/WhenPanggangApp'));
 const BirdShitApp = lazy(() => import('@apps/bird-shit/BirdShitApp'));
 const PaydayCountdownApp = lazy(() => import('@apps/payday-countdown/PaydayCountdownApp'));
+const SnakeApp = lazy(() => import('@apps/snake/SnakeApp'));
 
 /**
  * Available Applications
@@ -113,6 +115,16 @@ const apps: AppDefinition[] = [
     route: '/bird-shit',
     icon: <Bird className="w-5 h-5" />,
     component: BirdShitApp,
+    enabled: true,
+    category: 'games',
+  },
+  {
+    id: 'snake',
+    name: 'Snake',
+    description: 'Classic snake game - eat apples and grow!',
+    route: '/snake',
+    icon: <Ribbon className="w-5 h-5" />,
+    component: SnakeApp,
     enabled: true,
     category: 'games',
   },
