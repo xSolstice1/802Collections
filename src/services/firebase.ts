@@ -7,14 +7,16 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 
-// Firebase configuration from environment or direct config
+// Firebase configuration from environment variables
+// Note: Firebase config values are public and safe to expose in client-side code
+// Security is handled by Firestore Security Rules, not by hiding these values
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyCgwUVCfIgpsYZJCLPWZiTi5jAoCdFbAgU",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "collection-a7a10.firebaseapp.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "collection-a7a10",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "collection-a7a10.firebasestorage.app",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "998088577925",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:998088577925:web:8e735ad92100266afa2aec"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
 // Initialize Firebase (singleton pattern)
