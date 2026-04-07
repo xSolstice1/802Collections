@@ -1135,8 +1135,8 @@ const SnakeApp = () => {
           ref={canvasRef}
           width={CANVAS_W}
           height={CANVAS_H}
-          className={`rounded-lg border border-gray-800 ${isFullscreen ? 'max-h-full w-auto' : 'w-full'}`}
-          style={{ maxWidth: isFullscreen ? undefined : CANVAS_W, imageRendering: 'pixelated', touchAction: 'none', userSelect: 'none', WebkitTouchCallout: 'none', objectFit: 'contain' } as React.CSSProperties}
+          className={`rounded-lg border border-gray-800 ${isFullscreen ? '' : 'w-full'}`}
+          style={{ maxWidth: isFullscreen ? '100vw' : CANVAS_W, maxHeight: isFullscreen ? '100vh' : undefined, width: isFullscreen ? 'auto' : undefined, height: isFullscreen ? 'auto' : undefined, imageRendering: 'pixelated', touchAction: 'none', userSelect: 'none', WebkitTouchCallout: 'none', objectFit: 'contain' } as React.CSSProperties}
           onClick={handleCanvasClick}
           onTouchStart={handleCanvasTouchStart}
           onContextMenu={(e) => e.preventDefault()}
