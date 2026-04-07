@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { Ribbon, Play, Maximize, Minimize, Zap, Shield, Clock, Star, Ghost, Flame, Trophy, X } from 'lucide-react';
 import { GameLeaderboard } from '@components/leaderboard';
 import { leaderboardApi } from '@services/leaderboardApi';
+import { snakeSoundManager } from './sound';
 
 // --- Game Constants ---
 const CANVAS_W = 600;
@@ -159,6 +160,12 @@ const SnakeApp = () => {
   const playerNameRef = useRef(playerName);
   playerNameRef.current = playerName;
   const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const soundEnabled = localStorage.getItem('snake-sound-enabled') !== 'false';
+  const bgmEnabled = localStorage.getItem('snake-bgm-enabled') !== 'false';
+  // Use bgmEnabled to initialize sound manager
+  if (soundEnabled && bgmEnabled && gameState === 'playing') {
+    snakeSoundManager.startBGM();
+  }
 
   const currentHighScore = gameMode === 'classic' ? highScore : gameMode === 'modern' ? modernHighScore : crazyHighScore;
 
@@ -1272,20 +1279,48 @@ const SnakeApp = () => {
         if (ny < 0) ny = GRID_H - 1;
         else if (ny >= GRID_H) ny = 0;
       } else {
-        handleGameOver();
+        g.running = false;
+        setGameState('over');
+        const storageKey = gameMode === 'classic' ? STORAGE_KEY_CLASSIC : gameMode === 'modern' ? STORAGE_KEY_MODERN : STORAGE_KEY_CRAZY;
+        const hs = gameMode === 'classic' ? highScore : gameMode === 'modern' ? modernHighScore : crazyHighScore;
+        if (g.score > hs) {
+          if (gameMode === 'classic') setHighScore(g.score);
+          else if (gameMode === 'modern') setModernHighScore(g.score);
+          else setCrazyHighScore(g.score);
+          localStorage.setItem(storageKey, g.score.toString());
+        }
+        // Auto-submit score to leaderboard
+        submitScoreToLeaderboard(g.score);
+        draw();
         return;
       }
     }
 
     // Crazy wall collision
     if (isCrazy && g.crazyWalls.some(w => w.x === nx && w.y === ny)) {
-      handleGameOver();
+      g.running = false;
+      setGameState('over');
+      if (g.score > crazyHighScore) {
+        setCrazyHighScore(g.score);
+        localStorage.setItem(STORAGE_KEY_CRAZY, g.score.toString());
+      }
+      // Auto-submit score to leaderboard
+      submitScoreToLeaderboard(g.score);
+      draw();
       return;
     }
 
     // Landed stone collision
     if (isCrazy && g.fallingStones.some(s => s.landed && s.cell.x === nx && s.cell.y === ny)) {
-      handleGameOver();
+      g.running = false;
+      setGameState('over');
+      if (g.score > crazyHighScore) {
+        setCrazyHighScore(g.score);
+        localStorage.setItem(STORAGE_KEY_CRAZY, g.score.toString());
+      }
+      // Auto-submit score to leaderboard
+      submitScoreToLeaderboard(g.score);
+      draw();
       return;
     }
 
@@ -1302,7 +1337,19 @@ const SnakeApp = () => {
       } else if (isGhost) {
         // Ghost passes through itself
       } else {
-        handleGameOver();
+        g.running = false;
+        setGameState('over');
+        const storageKey = gameMode === 'classic' ? STORAGE_KEY_CLASSIC : gameMode === 'modern' ? STORAGE_KEY_MODERN : STORAGE_KEY_CRAZY;
+        const hs = gameMode === 'classic' ? highScore : gameMode === 'modern' ? modernHighScore : crazyHighScore;
+        if (g.score > hs) {
+          if (gameMode === 'classic') setHighScore(g.score);
+          else if (gameMode === 'modern') setModernHighScore(g.score);
+          else setCrazyHighScore(g.score);
+          localStorage.setItem(storageKey, g.score.toString());
+        }
+        // Auto-submit score to leaderboard
+        submitScoreToLeaderboard(g.score);
+        draw();
         return;
       }
     }
@@ -1360,6 +1407,10 @@ const SnakeApp = () => {
         g.combo++;
         g.lastEatTime = now;
       }
+      // Play eat sound
+      if (soundEnabled) {
+        snakeSoundManager.playEat();
+      }
     } else {
       g.snake.pop();
     }
@@ -1372,6 +1423,10 @@ const SnakeApp = () => {
           g.activePowerups = g.activePowerups.filter(ap => ap.type !== pu.type);
           g.activePowerups.push({ type: pu.type, endTime: now + info.effectDuration });
           spawnEatParticles(pu.cell.x * CELL_SIZE + CELL_SIZE / 2, GRID_OFFSET_Y + pu.cell.y * CELL_SIZE + CELL_SIZE / 2, info.color, '#fff');
+          // Play powerup sound
+          if (soundEnabled) {
+            snakeSoundManager.playPowerup();
+          }
           return false;
         }
         return true;
@@ -1432,8 +1487,7 @@ const SnakeApp = () => {
     tickRef.current = setTimeout(tick, BASE_TICK_MS);
     cancelAnimationFrame(renderRef.current);
     renderRef.current = requestAnimationFrame(renderLoop);
-  }, [tick, spawnFood, renderLoop, setGameState]);
-  startGameRef.current = startGame;
+  }, [tick, spawnFood, renderLoop]);
 
   // Keyboard
   useEffect(() => {
