@@ -1057,8 +1057,8 @@ const SnakeApp = () => {
 
     // Wall collision
     if (nx < 0 || nx >= GRID_W || ny < 0 || ny >= GRID_H) {
-      if (isGhost || isCrazy) {
-        // Wrap around
+      if (isGhost) {
+        // Ghost wraps around
         if (nx < 0) nx = GRID_W - 1;
         else if (nx >= GRID_W) nx = 0;
         if (ny < 0) ny = GRID_H - 1;
@@ -1066,11 +1066,12 @@ const SnakeApp = () => {
       } else {
         g.running = false;
         setGameState('over');
-        const storageKey = gameMode === 'classic' ? STORAGE_KEY_CLASSIC : STORAGE_KEY_MODERN;
-        const hs = gameMode === 'classic' ? highScore : modernHighScore;
+        const storageKey = gameMode === 'classic' ? STORAGE_KEY_CLASSIC : gameMode === 'modern' ? STORAGE_KEY_MODERN : STORAGE_KEY_CRAZY;
+        const hs = gameMode === 'classic' ? highScore : gameMode === 'modern' ? modernHighScore : crazyHighScore;
         if (g.score > hs) {
           if (gameMode === 'classic') setHighScore(g.score);
-          else setModernHighScore(g.score);
+          else if (gameMode === 'modern') setModernHighScore(g.score);
+          else setCrazyHighScore(g.score);
           localStorage.setItem(storageKey, g.score.toString());
         }
         draw();
@@ -1100,16 +1101,17 @@ const SnakeApp = () => {
         g.activePowerups = g.activePowerups.filter(ap => ap.type !== 'shield');
         g.shieldHits++;
         spawnEatParticles(nx * CELL_SIZE + CELL_SIZE / 2, GRID_OFFSET_Y + ny * CELL_SIZE + CELL_SIZE / 2, '#a78bfa', '#8b5cf6');
-      } else if (isGhost || isCrazy) {
-        // Pass through in crazy mode + ghost
+      } else if (isGhost) {
+        // Ghost passes through itself
       } else {
         g.running = false;
         setGameState('over');
-        const storageKey = gameMode === 'classic' ? STORAGE_KEY_CLASSIC : STORAGE_KEY_MODERN;
-        const hs = gameMode === 'classic' ? highScore : modernHighScore;
+        const storageKey = gameMode === 'classic' ? STORAGE_KEY_CLASSIC : gameMode === 'modern' ? STORAGE_KEY_MODERN : STORAGE_KEY_CRAZY;
+        const hs = gameMode === 'classic' ? highScore : gameMode === 'modern' ? modernHighScore : crazyHighScore;
         if (g.score > hs) {
           if (gameMode === 'classic') setHighScore(g.score);
-          else setModernHighScore(g.score);
+          else if (gameMode === 'modern') setModernHighScore(g.score);
+          else setCrazyHighScore(g.score);
           localStorage.setItem(storageKey, g.score.toString());
         }
         draw();
@@ -1615,7 +1617,7 @@ const SnakeApp = () => {
           </div>
         ) : (
           <div className="space-y-3">
-            <p className="text-orange-400 font-medium text-sm text-center">Random chaos events every few seconds. Walls wrap. Self-collision disabled. Good luck.</p>
+            <p className="text-orange-400 font-medium text-sm text-center">Random chaos events every few seconds. Everything kills you. Good luck.</p>
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
               {(['reverse', 'warp', 'portals', 'frenzy', 'walls', 'drunk', 'shrink', 'gravity', 'shake', 'rainbow'] as ChaosType[]).map(type => {
                 const info = CHAOS_INFO[type];
