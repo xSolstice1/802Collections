@@ -21,6 +21,11 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
+  // Only cache GET requests - POST and other methods are not cacheable
+  if (event.request.method !== 'GET') {
+    return;
+  }
+
   // Network-first strategy for navigation, cache-first for assets
   if (event.request.mode === 'navigate') {
     event.respondWith(
