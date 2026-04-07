@@ -5,15 +5,15 @@
  * Handles all leaderboard operations using Firebase SDK.
  */
 
-import { 
-  collection, 
-  getDocs, 
-  addDoc, 
-  query, 
-  where, 
-  orderBy, 
-  limit, 
-  Timestamp,
+import {
+  type Timestamp,
+  collection,
+  getDocs,
+  addDoc,
+  query,
+  where,
+  orderBy,
+  limit,
   getDoc,
   doc,
   deleteDoc,
@@ -76,9 +76,7 @@ class LeaderboardApiClient {
       // Fetch all entries ordered by score (no where clause = no index needed)
       const q = query(colRef, orderBy('score', 'desc'), limit(100));
       
-      console.log('Fetching leaderboard');
       const snapshot = await getDocs(q);
-      console.log('Got', snapshot.size, 'entries');
       
       const entries: LeaderboardEntry[] = [];
       
@@ -114,7 +112,7 @@ class LeaderboardApiClient {
    */
   async addEntry(name: string, score: number, game?: GameType, mode?: string): Promise<LeaderboardEntry | null> {
     try {
-      console.log('Adding entry:', { name, score, game, mode });
+      console.info('Adding entry:', { name, score, game, mode });
 
       if (!name || name.trim().length === 0) {
         throw new Error('Name is required');
@@ -128,7 +126,7 @@ class LeaderboardApiClient {
       const trimmedName = name.trim();
 
       // Check if entry with same name exists for this game/mode
-      const existingFilter: any[] = [where('name', '==', trimmedName)];
+      const existingFilter: ReturnType<typeof where>[] = [where('name', '==', trimmedName)];
       if (game) {
         existingFilter.push(where('game', '==', game));
       }
@@ -136,19 +134,14 @@ class LeaderboardApiClient {
         existingFilter.push(where('mode', '==', mode));
       }
 
-      console.log('Checking for existing entry with filter:', existingFilter);
       const existingQuery = query(colRef, ...existingFilter);
       const existingSnapshot = await getDocs(existingQuery);
-      console.log('Existing entries found:', existingSnapshot.size);
 
       if (!existingSnapshot.empty) {
         // Update existing entry if new score is higher
         const existingDoc = existingSnapshot.docs[0];
         const existingData = existingDoc.data() as FirestoreEntry;
-        console.log('Existing entry score:', existingData.score, 'New score:', score);
-
         if (score > existingData.score) {
-          console.log('Updating entry with higher score');
           await updateDoc(doc(db, this.collectionName, existingDoc.id), {
             score,
             updatedAt: serverTimestamp(),
@@ -164,7 +157,6 @@ class LeaderboardApiClient {
             updatedAt: new Date(),
           };
         } else {
-          console.log('Score not higher, returning existing entry');
           return {
             id: existingDoc.id,
             name: existingData.name,
@@ -177,7 +169,6 @@ class LeaderboardApiClient {
         }
       } else {
         // Create new entry
-        console.log('Creating new entry');
         const newEntry: Record<string, unknown> = {
           name: trimmedName,
           score,
@@ -194,13 +185,13 @@ class LeaderboardApiClient {
           createdAt: serverTimestamp(),
         });
 
-        console.log('Entry created with ID:', docRef.id);
+        console.info('Entry created with ID:', docRef.id);
         return {
           id: docRef.id,
           name: trimmedName,
           score,
           game: game || 'general',
-          mode: mode,
+          mode,
           createdAt: new Date(),
         };
       }
@@ -247,7 +238,7 @@ class LeaderboardApiClient {
       const q = query(
         colRef,
         where('name', '>=', name),
-        where('name', '<=', name + '\uf8ff'),
+        where('name', '<=', `${name  }\uf8ff`),
         orderBy('score', 'desc')
       );
       

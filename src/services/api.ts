@@ -166,7 +166,7 @@ class ApiService {
 
 // Create default API instance
 // In production, baseURL would come from environment variables
-export const api = new ApiService(import.meta.env.VITE_API_URL || '/api');
+export const api = new ApiService(import.meta.env.VITE_API_URL);
 
 // Export the class for custom instances
 export { ApiService };

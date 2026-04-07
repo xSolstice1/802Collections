@@ -26,8 +26,6 @@ import type {
   SkillCategory,
   TemplateId,
   ExportFormat,
-} from './types/resume';
-import {
   generateId,
   createEmptyResume,
   AVAILABLE_TEMPLATES,
@@ -42,7 +40,7 @@ import {
   generateFilename,
 } from './services/resumeService';
 
-type ActiveSection = 'contact' | 'experience' | 'education' | 'certifications' | 'awards' | 'skills';
+type ActiveSection = 'contact' | 'experience' | 'education' | 'certifications' | 'awards' | 'skills' | null;
 
 /**
  * Resume Builder App
@@ -134,7 +132,7 @@ const ResumeBuilderApp = () => {
     }));
   }, []);
 
-  const updateExperience = useCallback((id: string, field: keyof Experience, value: any) => {
+  const updateExperience = useCallback((id: string, field: keyof Experience, value: Experience[keyof Experience]) => {
     setResume(prev => ({
       ...prev,
       experience: prev.experience.map(exp =>
@@ -200,7 +198,7 @@ const ResumeBuilderApp = () => {
     }));
   }, []);
 
-  const updateEducation = useCallback((id: string, field: keyof Education, value: any) => {
+  const updateEducation = useCallback((id: string, field: keyof Education, value: Education[keyof Education]) => {
     setResume(prev => ({
       ...prev,
       education: prev.education.map(edu =>
@@ -233,7 +231,7 @@ const ResumeBuilderApp = () => {
     }));
   }, []);
 
-  const updateCertification = useCallback((id: string, field: keyof Certification, value: any) => {
+  const updateCertification = useCallback((id: string, field: keyof Certification, value: Certification[keyof Certification]) => {
     setResume(prev => ({
       ...prev,
       certifications: prev.certifications.map(cert =>
@@ -264,7 +262,7 @@ const ResumeBuilderApp = () => {
     }));
   }, []);
 
-  const updateAward = useCallback((id: string, field: keyof AwardType, value: any) => {
+  const updateAward = useCallback((id: string, field: keyof AwardType, value: AwardType[keyof AwardType]) => {
     setResume(prev => ({
       ...prev,
       awards: prev.awards.map(award =>
@@ -293,7 +291,7 @@ const ResumeBuilderApp = () => {
     }));
   }, []);
 
-  const updateSkillCategory = useCallback((id: string, field: keyof SkillCategory, value: any) => {
+  const updateSkillCategory = useCallback((id: string, field: keyof SkillCategory, value: SkillCategory[keyof SkillCategory]) => {
     setResume(prev => ({
       ...prev,
       skills: prev.skills.map(cat =>
@@ -574,7 +572,7 @@ const ResumeBuilderApp = () => {
             {/* Contact Section */}
             <div className="card">
               <button
-                onClick={() => setActiveSection(activeSection === 'contact' ? null as any : 'contact')}
+                onClick={() => setActiveSection(activeSection === 'contact' ? null : 'contact')}
                 className="flex items-center justify-between w-full mb-4"
               >
                 <div className="flex items-center gap-2">

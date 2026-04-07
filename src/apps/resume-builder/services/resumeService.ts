@@ -17,9 +17,9 @@ export const exportToPDF = async (element: HTMLElement, filename: string): Promi
     const opt = {
       margin: 0.5,
       filename: `${filename}.pdf`,
-      image: { type: 'jpeg' as 'jpeg', quality: 0.98 },
+      image: { type: 'jpeg' as const, quality: 0.98 },
       html2canvas: { scale: 2, useCORS: true },
-      jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' as 'portrait' },
+      jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' as const },
       pagebreak: { mode: ['avoid-all', 'css', 'legacy'] as ('avoid-all' | 'css' | 'legacy')[] },
     };
 
@@ -36,7 +36,7 @@ export const exportToPDF = async (element: HTMLElement, filename: string): Promi
  */
 export const exportToDOCX = async (resume: ResumeData, filename: string): Promise<boolean> => {
   try {
-    const docChildren: any[] = [];
+    const docChildren: Paragraph[] = [];
 
     // Name and Title
     docChildren.push(
@@ -311,7 +311,7 @@ export const parseResumeFromJSON = async (file: File): Promise<ResumeData | null
 /**
  * Basic validation and normalization of resume data
  */
-const validateResumeData = (data: any): ResumeData | null => {
+const validateResumeData = (data: Record<string, unknown>): ResumeData | null => {
   if (!data || typeof data !== 'object') return null;
 
   // Ensure all required fields exist with defaults
