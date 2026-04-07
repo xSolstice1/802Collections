@@ -55,6 +55,8 @@ const WheelOfLunchApp = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const lastClickSliceRef = useRef<number>(-1);
+  const clickIntervalRef = useRef<number | null>(null);
+  const spinningRef = useRef(false);
 
   // Save options to localStorage whenever they change
   useEffect(() => {
@@ -176,7 +178,7 @@ const WheelOfLunchApp = () => {
     drawWheel();
   }, [options, drawWheel]);
 
-  // Play click sound for wheel
+  // Play click sound for wheel - simulates the flapper hitting the pegs
   const playClickSound = useCallback(() => {
     if (muted) return;
     try {
@@ -184,19 +186,29 @@ const WheelOfLunchApp = () => {
         audioContextRef.current = new AudioContext();
       }
       const ctx = audioContextRef.current;
+      
+      // Create a more realistic "tick" sound using noise-like burst
       const oscillator = ctx.createOscillator();
       const gainNode = ctx.createGain();
+      const filter = ctx.createBiquadFilter();
 
-      oscillator.connect(gainNode);
+      // Use a high-frequency sine wave with quick decay for a "tick" sound
+      oscillator.connect(filter);
+      filter.connect(gainNode);
       gainNode.connect(ctx.destination);
 
-      oscillator.frequency.value = 800;
-      oscillator.type = 'square';
-      gainNode.gain.value = 0.05;
-      gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.05);
+      oscillator.frequency.value = 1200 + Math.random() * 400; // Slight variation for realism
+      oscillator.type = 'sine';
+      
+      filter.type = 'highpass';
+      filter.frequency.value = 2000;
+      
+      // Quick attack and decay for a sharp "tick"
+      gainNode.gain.setValueAtTime(0.15, ctx.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
 
       oscillator.start(ctx.currentTime);
-      oscillator.stop(ctx.currentTime + 0.05);
+      oscillator.stop(ctx.currentTime + 0.08);
     } catch {
       // Audio not supported
     }
@@ -237,6 +249,12 @@ const WheelOfLunchApp = () => {
   const spin = useCallback(() => {
     if (spinning || options.length === 0 || totalWeight === 0) return;
 
+    // Clear any existing interval
+    if (clickIntervalRef.current) {
+      clearInterval(clickIntervalRef.current);
+    }
+
+    spinningRef.current = true;
     setSpinning(true);
     setWinner(null);
     lastClickSliceRef.current = -1;
@@ -249,18 +267,39 @@ const WheelOfLunchApp = () => {
 
     setRotation(newRotation);
 
-    // Play click sounds during spin
-    const clickInterval = setInterval(() => {
-      if (!spinning) {
-        clearInterval(clickInterval);
-        return;
-      }
+    // Play click sounds during spin - start fast and slow down
+    let clickCount = 0;
+    const maxClicks = 40; // Total clicks during spin
+    const baseInterval = 80; // Starting interval (ms)
+    
+    const scheduleClick = () => {
+      if (!spinningRef.current) return;
+      
       playClickSound();
-    }, 150);
+      clickCount++;
+      
+      if (clickCount < maxClicks) {
+        // Gradually increase interval (slow down) as spin progresses
+        // Using exponential growth for realistic deceleration
+        const progress = clickCount / maxClicks;
+        const interval = baseInterval + Math.pow(progress, 2) * 400; // 80ms to 480ms
+        clickIntervalRef.current = window.setTimeout(scheduleClick, interval);
+      }
+    };
+    
+    // Start the clicking
+    clickIntervalRef.current = window.setTimeout(scheduleClick, baseInterval);
 
     // Calculate winner after animation
     setTimeout(() => {
-      clearInterval(clickInterval);
+      spinningRef.current = false;
+      setSpinning(false);
+      
+      // Clear click interval
+      if (clickIntervalRef.current) {
+        clearTimeout(clickIntervalRef.current);
+        clickIntervalRef.current = null;
+      }
       
       // Normalize rotation to 0-360
       const normalizedRotation = newRotation % 360;
