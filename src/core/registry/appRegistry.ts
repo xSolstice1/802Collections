@@ -1,5 +1,4 @@
-import type { AppDefinition } from '@model/index';
-import type { AppCategory } from '@model/index';
+import type { AppDefinition, AppCategory } from '@model/index';
 
 /**
  * App Registry
@@ -35,7 +34,7 @@ class AppRegistry {
       throw new Error(`App with ID "${app.id}" is already registered`);
     }
     this.apps.set(app.id, app);
-    console.log(`[AppRegistry] Registered app: ${app.name} (${app.id})`);
+    console.info(`[AppRegistry] Registered app: ${app.name} (${app.id})`);
   }
 
   /**
@@ -54,7 +53,7 @@ class AppRegistry {
   unregister(appId: string): boolean {
     const result = this.apps.delete(appId);
     if (result) {
-      console.log(`[AppRegistry] Unregistered app: ${appId}`);
+      console.info(`[AppRegistry] Unregistered app: ${appId}`);
     }
     return result;
   }
@@ -128,7 +127,7 @@ class AppRegistry {
    */
   clear(): void {
     this.apps.clear();
-    console.log('[AppRegistry] Cleared all apps');
+    console.info('[AppRegistry] Cleared all apps');
   }
 
   /**

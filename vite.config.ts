@@ -9,7 +9,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const base = '/802Collections/'
 
 export default defineConfig({
-  base: base,
+  base,
   plugins: [react()],
   resolve: {
     alias: {
