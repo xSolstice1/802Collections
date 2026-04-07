@@ -46,6 +46,7 @@ const POWERUP_INFO: Record<PowerupType, { color: string; glow: string; label: st
 const SnakeApp = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const gameAreaRef = useRef<HTMLDivElement>(null);
   const tickRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dirQueue = useRef<Direction[]>([]);
   const touchStart = useRef<{ x: number; y: number } | null>(null);
@@ -110,7 +111,7 @@ const SnakeApp = () => {
       if (document.fullscreenElement) {
         await document.exitFullscreen();
       } else {
-        const el = containerRef.current ?? document.documentElement;
+        const el = gameAreaRef.current ?? document.documentElement;
         await el.requestFullscreen();
       }
     } catch {}
@@ -1129,20 +1130,31 @@ const SnakeApp = () => {
       </div>
 
       {/* Game area */}
-      <div className="card p-4 flex flex-col items-center">
+      <div ref={gameAreaRef} className={`card p-4 flex flex-col items-center relative ${isFullscreen ? '!p-0 bg-black justify-center h-full' : ''}`}>
         <canvas
           ref={canvasRef}
           width={CANVAS_W}
           height={CANVAS_H}
-          className="rounded-lg border border-gray-800 w-full"
-          style={{ maxWidth: CANVAS_W, imageRendering: 'pixelated', touchAction: 'none', userSelect: 'none', WebkitTouchCallout: 'none' } as React.CSSProperties}
+          className={`rounded-lg border border-gray-800 ${isFullscreen ? 'max-h-full w-auto' : 'w-full'}`}
+          style={{ maxWidth: isFullscreen ? undefined : CANVAS_W, imageRendering: 'pixelated', touchAction: 'none', userSelect: 'none', WebkitTouchCallout: 'none', objectFit: 'contain' } as React.CSSProperties}
           onClick={handleCanvasClick}
           onTouchStart={handleCanvasTouchStart}
           onContextMenu={(e) => e.preventDefault()}
         />
 
+        {/* Fullscreen exit button overlay */}
+        {isFullscreen && (
+          <button
+            onClick={toggleFullscreen}
+            className="absolute top-3 right-3 p-2 rounded-lg bg-black/60 border border-gray-700 active:scale-90 z-10"
+            style={{ touchAction: 'none' }}
+          >
+            <Minimize className="w-4 h-4 text-gray-400" />
+          </button>
+        )}
+
         {/* Controls bar */}
-        <div className="flex items-center gap-4 mt-4">
+        <div className={`flex items-center gap-4 mt-4 ${isFullscreen ? 'hidden' : ''}`}>
           {gameState === 'idle' && (
             <button onClick={startGame} className="btn-primary flex items-center gap-2 px-6 py-2">
               <Play className="w-4 h-4" />
