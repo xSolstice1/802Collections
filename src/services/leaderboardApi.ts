@@ -19,7 +19,8 @@ import {
   deleteDoc,
   serverTimestamp,
   updateDoc,
-  getCountFromServer
+  getCountFromServer,
+  enableMultiTabIndexedDbPersistence
 } from 'firebase/firestore';
 import { db } from './firebase';
 
@@ -54,27 +55,91 @@ interface FirestoreEntry {
 }
 
 /**
+ * Cache for leaderboard entries to improve performance
+ */
+interface CacheEntry {
+  data: LeaderboardEntry[];
+  timestamp: number;
+}
+
+/**
  * Leaderboard API client class
  * Uses Firebase Firestore directly
  */
 class LeaderboardApiClient {
   private readonly collectionName = '802collection';
+  private readonly cache = new Map<string, CacheEntry>();
+  private readonly CACHE_TTL = 30000; // 30 seconds cache
+  private persistenceInitialized = false;
+
+  /**
+   * Initialize Firestore persistence for offline support
+   */
+  private async initPersistence(): Promise<void> {
+    if (this.persistenceInitialized) return;
+    
+    try {
+      await enableMultiTabIndexedDbPersistence(db);
+      this.persistenceInitialized = true;
+      console.info('Firestore persistence enabled');
+    } catch (error) {
+      // Persistence may already be enabled or failed
+      if ((error as { code?: string }).code === 'failed-precondition') {
+        console.warn('Firestore persistence failed: Multiple tabs open');
+      } else if ((error as { code?: string }).code === 'unimplemented') {
+        console.warn('Firestore persistence not supported in this browser');
+      } else {
+        console.warn('Firestore persistence error:', error);
+      }
+      this.persistenceInitialized = true;
+    }
+  }
+
+  /**
+   * Generate cache key for query
+   */
+  private getCacheKey(limitCount: number, game?: GameType, mode?: string): string {
+    return `${limitCount}-${game || 'all'}-${mode || 'all'}`;
+  }
+
+  /**
+   * Check if cache is valid
+   */
+  private isCacheValid(key: string): boolean {
+    const cached = this.cache.get(key);
+    if (!cached) return false;
+    return Date.now() - cached.timestamp < this.CACHE_TTL;
+  }
 
   /**
    * Get top leaderboard entries (default: top 20)
    * Optional game and mode filters for game-specific leaderboards
-   * Note: Uses client-side filtering to avoid Firestore index requirements
+   * Uses caching and optimized fetching for better performance
    */
   async getTopEntries(
     limitCount: number = 20, 
     game?: GameType, 
     mode?: string
   ): Promise<LeaderboardEntry[]> {
+    const cacheKey = this.getCacheKey(limitCount, game, mode);
+    
+    // Check cache first
+    if (this.isCacheValid(cacheKey)) {
+      const cached = this.cache.get(cacheKey)!;
+      console.debug('Using cached leaderboard data');
+      return cached.data;
+    }
+
+    // Initialize persistence on first fetch
+    await this.initPersistence();
+    
     try {
       const colRef = collection(db, this.collectionName);
       
-      // Fetch all entries ordered by score (no where clause = no index needed)
-      const q = query(colRef, orderBy('score', 'desc'), limit(100));
+      // Optimized: Fetch only the number of entries we might need
+      // We fetch more than limitCount to account for filtering
+      const fetchLimit = game || mode ? Math.min(limitCount * 3, 100) : limitCount;
+      const q = query(colRef, orderBy('score', 'desc'), limit(fetchLimit));
       
       const snapshot = await getDocs(q);
       
@@ -99,10 +164,49 @@ class LeaderboardApiClient {
       });
       
       // Return only the requested limit
-      return entries.slice(0, Math.min(limitCount, 20));
+      const result = entries.slice(0, Math.min(limitCount, 20));
+      
+      // Update cache
+      this.cache.set(cacheKey, {
+        data: result,
+        timestamp: Date.now()
+      });
+      
+      return result;
     } catch (error) {
       console.error('Error fetching leaderboard:', error);
+      // Return cached data if available on error
+      const cached = this.cache.get(cacheKey);
+      if (cached) {
+        console.warn('Returning stale cached data due to fetch error');
+        return cached.data;
+      }
       return [];
+    }
+  }
+
+  /**
+   * Clear the cache (useful after adding/updating entries)
+   */
+  clearCache(): void {
+    this.cache.clear();
+  }
+
+  /**
+   * Invalidate cache for specific query
+   */
+  invalidateCache(game?: GameType, mode?: string): void {
+    if (game || mode) {
+      // Invalidate specific cache entries
+      const keysToDelete: string[] = [];
+      this.cache.forEach((_, key) => {
+        if ((game && key.includes(game)) || (mode && key.includes(mode))) {
+          keysToDelete.push(key);
+        }
+      });
+      keysToDelete.forEach(key => this.cache.delete(key));
+    } else {
+      this.clearCache();
     }
   }
 
@@ -186,6 +290,10 @@ class LeaderboardApiClient {
         });
 
         console.info('Entry created with ID:', docRef.id);
+        
+        // Invalidate cache after successful write
+        this.invalidateCache(game, mode);
+        
         return {
           id: docRef.id,
           name: trimmedName,
@@ -198,6 +306,9 @@ class LeaderboardApiClient {
     } catch (error) {
       console.error('Error adding entry:', error);
       throw error;
+    } finally {
+      // Always invalidate cache after add/update attempt
+      this.invalidateCache(game, mode);
     }
   }
 

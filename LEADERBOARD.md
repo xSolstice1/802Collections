@@ -26,18 +26,20 @@ The leaderboard feature uses Firebase Firestore for data persistence. No backend
 
 ### Firestore Security Rules
 
-Set up Firestore security rules to allow read/write access to the `leaderboard` collection:
+Set up Firestore security rules to allow read/write access to the `802collection` collection:
 
 ```javascript
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /leaderboard/{document=**} {
+    match /802collection/{document=**} {
       allow read, write: if true;
     }
   }
 }
 ```
+
+> **Important**: Make sure your Firestore security rules match the collection name exactly. The collection name is `802collection`.
 
 > **Note**: For production, you should implement proper security rules to prevent abuse.
 
