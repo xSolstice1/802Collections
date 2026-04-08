@@ -74,6 +74,7 @@ class LeaderboardApiClient {
 
   /**
    * Initialize Firestore persistence for offline support
+   * Handles stale cache issues by detecting and recovering from IndexedDB errors
    */
   private async initPersistence(): Promise<void> {
     if (this.persistenceInitialized) return;
@@ -84,10 +85,27 @@ class LeaderboardApiClient {
       console.info('Firestore persistence enabled');
     } catch (error) {
       // Persistence may already be enabled or failed
-      if ((error as { code?: string }).code === 'failed-precondition') {
+      const errorCode = (error as { code?: string }).code;
+      if (errorCode === 'failed-precondition') {
         console.warn('Firestore persistence failed: Multiple tabs open');
-      } else if ((error as { code?: string }).code === 'unimplemented') {
+      } else if (errorCode === 'unimplemented') {
         console.warn('Firestore persistence not supported in this browser');
+      } else if (errorCode === 'failed') {
+        // IndexedDB might be corrupted, try to clear and retry
+        console.warn('Firestore persistence failed, attempting recovery...');
+        try {
+          // Clear the IndexedDB database
+          const request = indexedDB.deleteDatabase('firebaseLocalStorage');
+          await new Promise((resolve, reject) => {
+            request.onsuccess = resolve;
+            request.onerror = reject;
+          });
+          // Retry persistence
+          await enableMultiTabIndexedDbPersistence(db);
+          console.info('Firestore persistence enabled after recovery');
+        } catch (retryError) {
+          console.error('Failed to recover persistence:', retryError);
+        }
       } else {
         console.warn('Firestore persistence error:', error);
       }

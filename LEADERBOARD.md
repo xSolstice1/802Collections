@@ -45,6 +45,7 @@ service cloud.firestore {
 
 ### Configuration
 
+#### Local Development
 Update your `.env` file with your Firebase configuration:
 
 ```env
@@ -56,6 +57,20 @@ VITE_FIREBASE_STORAGE_BUCKET=your-project.firebasestorage.app
 VITE_FIREBASE_MESSAGING_SENDER_ID=your-sender-id
 VITE_FIREBASE_APP_ID=your-app-id
 ```
+
+#### GitHub Pages Deployment
+For GitHub Pages deployment, you need to set up GitHub Actions with repository secrets:
+
+1. Go to your GitHub repository → Settings → Secrets and variables → Actions
+2. Add the following secrets:
+   - `FIREBASE_API_KEY`
+   - `FIREBASE_AUTH_DOMAIN`
+   - `FIREBASE_PROJECT_ID`
+   - `FIREBASE_STORAGE_BUCKET`
+   - `FIREBASE_MESSAGING_SENDER_ID`
+   - `FIREBASE_APP_ID`
+
+The GitHub Actions workflow will automatically build and deploy your app with the correct environment variables.
 
 ## Usage
 
