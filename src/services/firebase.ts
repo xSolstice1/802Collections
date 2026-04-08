@@ -1,11 +1,12 @@
 /**
  * Firebase Configuration
  * 
- * Initialize Firebase app and Firestore database
+ * Initialize Firebase app, Firestore database, and Realtime Database
  */
 
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
+import { getDatabase } from 'firebase/database';
 
 // Firebase configuration from environment variables
 // Note: Firebase config values are public and safe to expose in client-side code
@@ -25,5 +26,9 @@ const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 // Initialize Firestore
 const db = getFirestore(app);
 
-export { app, db };
+// Initialize Realtime Database
+// The Realtime Database URL is derived from the project ID
+const rtdb = getDatabase(app, 'https://collection-a7a10-default-rtdb.asia-southeast1.firebasedatabase.app');
+
+export { app, db, rtdb };
 export default db;

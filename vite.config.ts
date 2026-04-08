@@ -5,8 +5,8 @@ import { fileURLToPath } from 'url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
-// GitHub Pages base path - must match repo name exactly
-const base = '/802Collections/'
+// Use '/' for local development, '/802Collections/' for production build (GitHub Pages)
+const base = process.env.NODE_ENV === 'development' ? '/' : '/802Collections/'
 
 export default defineConfig({
   base,
