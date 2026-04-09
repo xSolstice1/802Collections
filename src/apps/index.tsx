@@ -8,7 +8,8 @@ import {
   Flame,
   Bird,
   DollarSign,
-  Ribbon
+  Ribbon,
+  Gamepad2
 } from 'lucide-react';
 import { appRegistry } from '@core/registry/appRegistry';
 import type { AppDefinition } from '@model/index';
@@ -33,6 +34,7 @@ const WhenPanggangApp = lazy(() => import('@apps/when-panggang/WhenPanggangApp')
 const BirdShitApp = lazy(() => import('@apps/bird-shit/BirdShitApp'));
 const PaydayCountdownApp = lazy(() => import('@apps/payday-countdown/PaydayCountdownApp'));
 const SnakeApp = lazy(() => import('@apps/snake/SnakeApp'));
+const MonopolyApp = lazy(() => import('@apps/monopoly/MonopolyWrapper'));
 
 /**
  * Available Applications
@@ -137,6 +139,16 @@ const apps: AppDefinition[] = [
     component: PaydayCountdownApp,
     enabled: true,
     category: 'utilities',
+  },
+  {
+    id: 'monopoly',
+    name: 'Corporate Monopoly',
+    description: 'Empire Edition - Build your gaming empire!',
+    route: '/monopoly',
+    icon: <Gamepad2 className="w-5 h-5" />,
+    component: MonopolyApp,
+    enabled: true,
+    category: 'games',
   },
 ];
 
