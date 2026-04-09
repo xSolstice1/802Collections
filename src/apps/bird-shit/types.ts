@@ -42,6 +42,19 @@ export interface Bullet extends Entity {
   vy: number;
 }
 
+export interface Obstacle extends Entity {
+  speed: number;
+  windowOffset: number; // random seed for window pattern
+}
+
+export interface Balloon extends Entity {
+  speed: number;
+  baseY: number;      // stable y reference for bobbing
+  driftPhase: number; // sine wave phase offset
+  driftAmp: number;   // bobbing amplitude in px
+  colorIndex: number; // index into BALLOON_COLORS
+}
+
 export type GameState = 'idle' | 'playing' | 'upgrading' | 'over';
 
 export interface GameData {
@@ -56,6 +69,8 @@ export interface GameData {
   pedestrians: Pedestrian[];
   hunters: Hunter[];
   bullets: Bullet[];
+  obstacles: Obstacle[];
+  balloons: Balloon[];
   frame: number;
   wingUp: boolean;
   hitFlash: number;

@@ -25,6 +25,35 @@ export const POOP_GRAVITY = 0.1;
 export const COUNTDOWN_FRAMES = 180; // 3 seconds at 60fps
 export const STORAGE_KEY = 'bird-shit-highscore';
 
+export const OBSTACLE_W = 42;
+export const OBSTACLE_MIN_LEVEL = 3;
+export const OBSTACLE_MIN_H = 50;
+export const OBSTACLE_TOP_GAP = 90; // minimum clear sky gap above any building
+
+// Spawn interval in frames; returns Infinity if obstacles not yet active
+export function getObstacleSpawnInterval(level: number): number {
+  if (level < OBSTACLE_MIN_LEVEL) return Infinity;
+  return Math.max(90, 280 - (level - OBSTACLE_MIN_LEVEL) * 22);
+}
+
+// Maximum building height at a given level (always leaves OBSTACLE_TOP_GAP clear)
+export function getObstacleMaxHeight(level: number): number {
+  if (level < OBSTACLE_MIN_LEVEL) return 0;
+  const cap = GROUND_Y - SKY_MIN - OBSTACLE_TOP_GAP;
+  return Math.min(cap, OBSTACLE_MIN_H + (level - OBSTACLE_MIN_LEVEL) * 28);
+}
+
+export const BALLOON_W = 22;
+export const BALLOON_H = 28;
+export const BALLOON_MIN_LEVEL = 3;
+export const BALLOON_COLORS = ['#ef4444', '#3b82f6', '#fbbf24', '#22c55e', '#ec4899', '#f97316'];
+
+// Staggered from building interval so they don't sync up
+export function getBalloonSpawnInterval(level: number): number {
+  if (level < BALLOON_MIN_LEVEL) return Infinity;
+  return Math.max(80, 210 - (level - BALLOON_MIN_LEVEL) * 18);
+}
+
 const LEVEL_THRESHOLDS = [0, 100, 250, 500, 800, 1200, 1700, 2300, 3000, 3800];
 
 export function getLevelThreshold(level: number): number {

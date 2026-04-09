@@ -6,12 +6,13 @@ import {
   BASE_SCROLL_SPEED, BASE_SPAWN_INTERVAL_PED, BASE_SPAWN_INTERVAL_HUNTER,
   BASE_HUNTER_SHOOT_INTERVAL, BASE_BULLET_SPEED,
   POOP_COOLDOWN_FRAMES, GRAVITY, POOP_GRAVITY, COUNTDOWN_FRAMES, STORAGE_KEY,
-  getLevelThreshold, collides,
+  OBSTACLE_W, getLevelThreshold, collides, getObstacleSpawnInterval, getObstacleMaxHeight, OBSTACLE_MIN_H,
+  BALLOON_W, BALLOON_H, getBalloonSpawnInterval,
 } from '../constants';
 import { DEFAULT_UPGRADES, UPGRADE_DEFS, getPoopSpeed, getPoopW, getPoopH, getBirdSpeed, getHomingStrength } from '../upgrades';
-import { drawPedestrian, drawHunter, drawBullet, drawPoop, drawHeart, drawCoin, drawUpgradeScreen } from '../renderers';
+import { drawObstacle, drawBalloon, drawPedestrian, drawHunter, drawBullet, drawPoop, drawHeart, drawCoin, drawUpgradeScreen } from '../renderers';
 import { leaderboardApi } from '@services/leaderboardApi';
-import type { GameState, GameData, Upgrades, Entity } from '../types';
+import type { GameState, GameData, Upgrades, Entity, Obstacle, Balloon } from '../types';
 import type { DrawBirdFn } from '../skins';
 
 interface UseGameLoopParams {
@@ -62,6 +63,8 @@ export function useGameLoop({
     pedestrians: [],
     hunters: [],
     bullets: [],
+    obstacles: [],
+    balloons: [],
     frame: 0,
     wingUp: false,
     hitFlash: 0,
@@ -181,6 +184,36 @@ export function useGameLoop({
           shootTimer: 30 + Math.floor(Math.random() * 40),
         });
       }
+      const obstacleInterval = getObstacleSpawnInterval(g.level);
+      if (obstacleInterval !== Infinity && g.frame % Math.floor(obstacleInterval) === 0) {
+        const maxH = getObstacleMaxHeight(g.level);
+        const h = OBSTACLE_MIN_H + Math.floor(Math.random() * (maxH - OBSTACLE_MIN_H + 1));
+        const obs: Obstacle = {
+          x: CANVAS_W + Math.random() * 60,
+          y: GROUND_Y - h,
+          w: OBSTACLE_W,
+          h,
+          speed: g.scrollSpeed * 0.85,
+          windowOffset: Math.floor(Math.random() * 7),
+        };
+        g.obstacles.push(obs);
+      }
+      const balloonInterval = getBalloonSpawnInterval(g.level);
+      if (balloonInterval !== Infinity && g.frame % Math.floor(balloonInterval) === 0) {
+        const baseY = SKY_MIN + 20 + Math.floor(Math.random() * (GROUND_Y - SKY_MIN - 140));
+        const bal: Balloon = {
+          x: CANVAS_W + Math.random() * 80,
+          y: baseY,
+          w: BALLOON_W,
+          h: BALLOON_H,
+          speed: g.scrollSpeed * 0.7 + Math.random() * 0.4,
+          baseY,
+          driftPhase: Math.random() * Math.PI * 2,
+          driftAmp: 8 + Math.random() * 12,
+          colorIndex: Math.floor(Math.random() * 6),
+        };
+        g.balloons.push(bal);
+      }
     }
 
     const homingStr = getHomingStrength(g.upgrades);
@@ -232,6 +265,21 @@ export function useGameLoop({
           g.hunters.splice(i, 1);
           g.score += 25;
           g.coins += 3;
+          setScore(g.score);
+          setCoins(g.coins);
+          return false;
+        }
+      }
+      // Poops are blocked by buildings
+      for (const obs of g.obstacles) {
+        if (collides(p, obs)) return false;
+      }
+      // Poops pop balloons for a small bonus
+      for (let i = g.balloons.length - 1; i >= 0; i--) {
+        if (collides(p, g.balloons[i])) {
+          g.balloons.splice(i, 1);
+          g.score += 5;
+          g.coins += 1;
           setScore(g.score);
           setCoins(g.coins);
           return false;
@@ -300,6 +348,49 @@ export function useGameLoop({
       return b.x > -10 && b.x < CANVAS_W + 10 && b.y > -10 && b.y < CANVAS_H + 10;
     });
 
+    // Update obstacles + bird collision
+    g.obstacles = g.obstacles.filter((obs) => {
+      obs.x -= obs.speed;
+      if (!inCountdown && g.hitFlash === 0 && collides(birdEntity, obs)) {
+        g.lives--;
+        g.hitFlash = 40;
+        setLives(g.lives);
+        if (g.lives <= 0) {
+          g.running = false;
+          setGameState('over');
+          if (g.score > highScoreRef.current) {
+            setHighScore(g.score);
+            localStorage.setItem(STORAGE_KEY, g.score.toString());
+          }
+          submitScoreRef.current(g.score);
+        }
+      }
+      return obs.x > -OBSTACLE_W;
+    });
+
+    // Update balloons + bird collision
+    g.balloons = g.balloons.filter((bal) => {
+      bal.x -= bal.speed;
+      bal.y = bal.baseY + Math.sin(g.frame * 0.025 + bal.driftPhase) * bal.driftAmp;
+      const balEntity = { x: bal.x + 3, y: bal.y + 3, w: BALLOON_W - 6, h: BALLOON_H - 6 };
+      if (!inCountdown && g.hitFlash === 0 && collides(birdEntity, balEntity)) {
+        g.lives--;
+        g.hitFlash = 40;
+        setLives(g.lives);
+        if (g.lives <= 0) {
+          g.running = false;
+          setGameState('over');
+          if (g.score > highScoreRef.current) {
+            setHighScore(g.score);
+            localStorage.setItem(STORAGE_KEY, g.score.toString());
+          }
+          submitScoreRef.current(g.score);
+        }
+        return false;
+      }
+      return bal.x > -BALLOON_W;
+    });
+
     if (!g.running) return;
 
     // Draw sky
@@ -331,6 +422,8 @@ export function useGameLoop({
     }
 
     // Draw entities
+    g.obstacles.forEach((o) => drawObstacle(ctx, o));
+    g.balloons.forEach((bal) => drawBalloon(ctx, bal, g.frame));
     g.pedestrians.forEach((p) => drawPedestrian(ctx, p));
     g.hunters.forEach((h) => drawHunter(ctx, h));
     g.bullets.forEach((b) => drawBullet(ctx, b));
@@ -434,6 +527,8 @@ export function useGameLoop({
     const g = gameRef.current;
     g.running = true;
     g.bullets = [];
+    g.obstacles = [];
+    g.balloons = [];
     g.countdownTimer = COUNTDOWN_FRAMES;
     setGameState('playing');
     frameRef.current = requestAnimationFrame(gameLoop);
@@ -469,6 +564,8 @@ export function useGameLoop({
     g.pedestrians = [];
     g.hunters = [];
     g.bullets = [];
+    g.obstacles = [];
+    g.balloons = [];
     g.frame = 0;
     g.hitFlash = 0;
     g.poopCooldown = 0;
