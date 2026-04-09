@@ -1,0 +1,11 @@
+export { drawBird } from './drawBird';
+export { drawBirdMagpie } from './drawBirdMagpie';
+export { drawBirdCrowned } from './drawBirdCrowned';
+export { drawBirdOwl } from './drawBirdOwl';
+export { drawBirdToucan } from './drawBirdToucan';
+export { drawBirdEagle } from './drawBirdEagle';
+export { drawPedestrian } from './drawPedestrian';
+export { drawHunter } from './drawHunter';
+export { drawBullet } from './drawBullet';
+export { drawPoop } from './drawPoop';
+export { drawHeart, drawCoin, drawUpgradeScreen } from './drawHUD';
