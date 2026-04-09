@@ -14,6 +14,7 @@ import {
   update,
   remove,
   get,
+  onDisconnect,
   DataSnapshot,
   Unsubscribe,
 } from 'firebase/database';
@@ -274,6 +275,42 @@ export const subscribeToPlayers = (
 };
 
 // ============================================================================
+// Player Presence (disconnect detection)
+// ============================================================================
+
+/**
+ * Set player as online and register onDisconnect cleanup.
+ * When the client loses connection, Firebase auto-removes the presence flag.
+ */
+export const setPlayerPresence = async (roomId: string, playerId: string): Promise<void> => {
+  const presenceRef = ref(rtdb, `rooms/${roomId}/presence/${playerId}`);
+  await set(presenceRef, true);
+  onDisconnect(presenceRef).remove();
+};
+
+/**
+ * Explicitly remove player presence (on voluntary leave)
+ */
+export const removePlayerPresence = async (roomId: string, playerId: string): Promise<void> => {
+  const presenceRef = ref(rtdb, `rooms/${roomId}/presence/${playerId}`);
+  await remove(presenceRef);
+};
+
+/**
+ * Subscribe to presence changes for all players in a room
+ */
+export const subscribeToPresence = (
+  roomId: string,
+  callback: (presence: Record<string, boolean>) => void
+): Unsubscribe => {
+  const presenceRef = ref(rtdb, `rooms/${roomId}/presence`);
+  onValue(presenceRef, (snapshot: DataSnapshot) => {
+    callback(snapshot.exists() ? snapshot.val() : {});
+  });
+  return () => off(presenceRef);
+};
+
+// ============================================================================
 // Helper Functions
 // ============================================================================
 
@@ -340,4 +377,9 @@ export default {
   subscribeToRoom,
   subscribeToGameState,
   subscribeToPlayers,
+
+  // Presence
+  setPlayerPresence,
+  removePlayerPresence,
+  subscribeToPresence,
 };

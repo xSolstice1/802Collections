@@ -7,7 +7,7 @@
 import React, { useState, useEffect } from 'react';
 import { Users, Play, Copy, Check, Sparkles, Gamepad2 } from 'lucide-react';
 import { useMonopolyGame } from '../../hooks/useMonopolyGame';
-import { getRoomByInviteCode, saveRoom, setPlayerInRoom, subscribeToGameState, subscribeToPlayers, subscribeToRoom, updateGameState, updateRoomStatus } from '../../services/firebaseMonopoly';
+import { getRoomByInviteCode, saveRoom, setPlayerInRoom, subscribeToGameState, subscribeToPlayers, subscribeToRoom, updateGameState, updateRoomStatus, setPlayerPresence } from '../../services/firebaseMonopoly';
 import { useMonopolyStore } from '../../store/gameStore';
 import type { Player } from '../../types';
 
@@ -23,6 +23,7 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onGameStart }) => {
     canStartGame,
     createRoom,
     joinRoom,
+    handleLeaveRoom,
     startGame,
     setNotification,
     syncPlayers,
@@ -100,6 +101,7 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onGameStart }) => {
     try {
       await saveRoom(newRoom);
       await writePlayerToFirebase(newRoom.id, player);
+      if (player) await setPlayerPresence(newRoom.id, player.id);
     } catch (err) {
       console.error('Failed to save room to Firebase:', err);
       setNotification({ message: 'Room created locally, but others may not be able to join.', type: 'error' });
@@ -141,6 +143,7 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onGameStart }) => {
 
       if (player) {
         await writePlayerToFirebase(foundRoom.id, player);
+        await setPlayerPresence(foundRoom.id, player.id);
         setNotification({ message: `Joined room "${foundRoom.name}"!`, type: 'success' });
       } else {
         setError('Failed to join room. It may be full.');
@@ -342,7 +345,7 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onGameStart }) => {
               <button
                 onClick={() => {
                   playSound('click');
-                  // Leave room logic
+                  handleLeaveRoom();
                 }}
                 className="px-6 py-3 border border-gray-600 hover:border-gray-500 text-gray-300 rounded-lg transition-colors"
               >

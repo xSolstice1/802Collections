@@ -8,7 +8,7 @@ import { useCallback, useMemo } from 'react';
 import { useMonopolyStore } from '../store/gameStore';
 import type { Property } from '../types';
 import { monopolySoundEngine } from '../sound/MonopolySound';
-import { updateGameState } from '../services/firebaseMonopoly';
+import { updateGameState, removePlayerPresence, removePlayerFromRoom } from '../services/firebaseMonopoly';
 
 // ============================================================================
 // Main Game Hook
@@ -44,6 +44,7 @@ export const useMonopolyGame = () => {
     setShowTradeModal,
     setShowPowerModal,
     setNotification,
+    removePlayer,
     syncFromFirebase,
     syncPlayers,
     getCurrentPlayer,
@@ -326,6 +327,38 @@ export const useMonopolyGame = () => {
     }
   }, [myPlayer, usePower, playSound, setNotification, syncGameStateToFirebase]);
 
+  const handleLeaveRoom = useCallback(async () => {
+    const state = useMonopolyStore.getState();
+    const roomId = state.room?.id;
+    const myId = state.currentUserId;
+
+    if (roomId && myId) {
+      // Remove player from game state (releases properties, advances turn)
+      removePlayer(myId);
+
+      // Sync updated game state to Firebase
+      const freshState = useMonopolyStore.getState();
+      if (freshState.gameState) {
+        try {
+          await updateGameState(roomId, freshState.gameState);
+        } catch (err) {
+          console.error('Failed to sync after player removal:', err);
+        }
+      }
+
+      // Remove presence and player record from Firebase
+      try {
+        await removePlayerPresence(roomId, myId);
+        await removePlayerFromRoom(roomId, myId);
+      } catch (err) {
+        console.error('Failed to clean up Firebase player data:', err);
+      }
+    }
+
+    // Clear local state
+    leaveRoom();
+  }, [removePlayer, leaveRoom]);
+
   const handleDrawMarketEvent = useCallback(() => {
     if (!myPlayer) return;
     playSound('card_draw');
@@ -421,6 +454,8 @@ export const useMonopolyGame = () => {
     createRoom,
     joinRoom,
     leaveRoom,
+    handleLeaveRoom,
+    removePlayer,
     startGame,
     handleRollDice,
     handleBuyProperty,
