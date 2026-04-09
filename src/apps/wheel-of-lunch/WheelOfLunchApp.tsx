@@ -1,11 +1,12 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Plus, Trash2, RotateCcw, Utensils, Volume2, VolumeX } from 'lucide-react';
+import { Plus, Trash2, RotateCcw, Utensils, Volume2, VolumeX, Lock, Unlock } from 'lucide-react';
 import {
   subscribeToOptions,
   setAllOptions,
   upsertOption,
   removeOption as fbRemoveOption,
   updateOption,
+  isKeyValid,
 } from './services/firebaseWheel';
 import type { WheelOption } from './services/firebaseWheel';
 
@@ -36,6 +37,27 @@ const WheelOfLunchApp = () => {
   const [rotation, setRotation] = useState(0);
   const [winner, setWinner] = useState<string | null>(null);
   const [muted, setMuted] = useState(false);
+
+  // Key-based editing lock
+  const [wheelKey, setWheelKey] = useState(() => sessionStorage.getItem('wheel-key') || '');
+  const unlocked = isKeyValid(wheelKey);
+
+  const handleUnlock = () => {
+    const input = prompt('Enter wheel key to unlock editing:');
+    if (input !== null) {
+      if (isKeyValid(input)) {
+        setWheelKey(input);
+        sessionStorage.setItem('wheel-key', input);
+      } else {
+        alert('Invalid key.');
+      }
+    }
+  };
+
+  const handleLock = () => {
+    setWheelKey('');
+    sessionStorage.removeItem('wheel-key');
+  };
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const lastClickSliceRef = useRef<number>(-1);
@@ -47,14 +69,14 @@ const WheelOfLunchApp = () => {
     const unsub = subscribeToOptions((remote) => {
       if (remote.length > 0) {
         setOptions(remote);
-      } else if (!loaded) {
-        // First load and nothing in Firebase yet — seed with defaults
-        setAllOptions(defaultOptions);
+      } else if (!loaded && unlocked) {
+        // First load, nothing in Firebase yet, and we have the key — seed defaults
+        setAllOptions(wheelKey, defaultOptions);
       }
       setLoaded(true);
     });
     return () => unsub();
-  }, []);
+  }, [unlocked]);
 
   // Calculate total weight
   const totalWeight = options.reduce((sum, opt) => sum + opt.weight, 0);
@@ -337,7 +359,7 @@ const WheelOfLunchApp = () => {
 
   // Add new option → Firebase (subscription will update local state)
   const addOption = () => {
-    if (!newOption.trim()) return;
+    if (!unlocked || !newOption.trim()) return;
 
     const newOpt: WheelOption = {
       id: Date.now().toString(),
@@ -346,26 +368,28 @@ const WheelOfLunchApp = () => {
       color: COLORS[options.length % COLORS.length],
     };
 
-    upsertOption(newOpt);
+    upsertOption(wheelKey, newOpt);
     setNewOption('');
   };
 
   // Remove option → Firebase
   const removeOption = (id: string) => {
-    if (options.length <= 1) return;
-    fbRemoveOption(id);
+    if (!unlocked || options.length <= 1) return;
+    fbRemoveOption(wheelKey, id);
   };
 
   // Update weight → Firebase
   const updateWeight = (id: string, delta: number) => {
+    if (!unlocked) return;
     const opt = options.find(o => o.id === id);
     if (!opt) return;
-    updateOption(id, { weight: Math.max(1, opt.weight + delta) });
+    updateOption(wheelKey, id, { weight: Math.max(1, opt.weight + delta) });
   };
 
   // Update color → Firebase
   const updateColor = (id: string, color: string) => {
-    updateOption(id, { color });
+    if (!unlocked) return;
+    updateOption(wheelKey, id, { color });
   };
 
   // Reset wheel (local UI only — doesn't touch options)
@@ -377,8 +401,9 @@ const WheelOfLunchApp = () => {
 
   // Clear all and reset to defaults → Firebase
   const clearAll = () => {
+    if (!unlocked) return;
     if (confirm('Reset to default options?')) {
-      setAllOptions(defaultOptions);
+      setAllOptions(wheelKey, defaultOptions);
       reset();
     }
   };
@@ -396,9 +421,21 @@ const WheelOfLunchApp = () => {
             <p className="text-sm text-black-400">Can't decide? Let the wheel choose!</p>
           </div>
         </div>
-        <button onClick={clearAll} className="btn-ghost text-sm">
-          Reset Defaults
-        </button>
+        <div className="flex items-center gap-2">
+          {unlocked && (
+            <button onClick={clearAll} className="btn-ghost text-sm">
+              Reset Defaults
+            </button>
+          )}
+          <button
+            onClick={unlocked ? handleLock : handleUnlock}
+            className={`btn-ghost text-sm flex items-center gap-1 ${unlocked ? 'text-802' : ''}`}
+            title={unlocked ? 'Lock editing' : 'Unlock editing'}
+          >
+            {unlocked ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+            {unlocked ? 'Locked In' : 'Unlock'}
+          </button>
+        </div>
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
@@ -471,26 +508,33 @@ const WheelOfLunchApp = () => {
         <div className="card">
           <h3 className="text-lg font-semibold text-black-100 mb-4">Options ({options.length})</h3>
 
-          {/* Add Option */}
-          <div className="flex gap-2 mb-4">
-            <input
-              type="text"
-              value={newOption}
-              onChange={(e) => setNewOption(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && addOption()}
-              placeholder="Add option..."
-              maxLength={20}
-              className="input flex-1"
-            />
-            <button
-              onClick={addOption}
-              disabled={!newOption.trim()}
-              className="btn-primary flex items-center gap-1 disabled:opacity-50"
-            >
-              <Plus className="w-4 h-4" />
-              Add
-            </button>
-          </div>
+          {/* Add Option (requires unlock) */}
+          {unlocked ? (
+            <div className="flex gap-2 mb-4">
+              <input
+                type="text"
+                value={newOption}
+                onChange={(e) => setNewOption(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && addOption()}
+                placeholder="Add option..."
+                maxLength={20}
+                className="input flex-1"
+              />
+              <button
+                onClick={addOption}
+                disabled={!newOption.trim()}
+                className="btn-primary flex items-center gap-1 disabled:opacity-50"
+              >
+                <Plus className="w-4 h-4" />
+                Add
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 mb-4 p-3 rounded-lg bg-black-800/30 border border-black-700 text-black-500 text-sm">
+              <Lock className="w-4 h-4 flex-shrink-0" />
+              Unlock with key to add or edit options
+            </div>
+          )}
 
           {/* Options List */}
           <div className="space-y-2 max-h-96 overflow-y-auto">
@@ -501,50 +545,58 @@ const WheelOfLunchApp = () => {
               >
                 {/* Color Picker */}
                 <div className="relative flex-shrink-0">
-                  <input
-                    type="color"
-                    value={option.color}
-                    onChange={(e) => updateColor(option.id, e.target.value)}
-                    className="w-7 h-7 rounded cursor-pointer border-0 p-0"
-                    style={{ backgroundColor: option.color }}
-                  />
+                  {unlocked ? (
+                    <input
+                      type="color"
+                      value={option.color}
+                      onChange={(e) => updateColor(option.id, e.target.value)}
+                      className="w-7 h-7 rounded cursor-pointer border-0 p-0"
+                      style={{ backgroundColor: option.color }}
+                    />
+                  ) : null}
                   <div
-                    className="absolute inset-0 w-7 h-7 rounded pointer-events-none border border-black-500"
+                    className={`${unlocked ? 'absolute inset-0' : ''} w-7 h-7 rounded pointer-events-none border border-black-500`}
                     style={{ backgroundColor: option.color }}
                   />
                 </div>
 
                 <span className="flex-1 text-black-100 truncate font-medium">{option.name}</span>
-                
+
                 {/* Weight Controls */}
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-black-400 w-12 text-center font-medium">
                     ×{option.weight}
                   </span>
-                  <button
-                    onClick={() => updateWeight(option.id, -1)}
-                    disabled={option.weight <= 1}
-                    className="w-6 h-6 flex items-center justify-center rounded bg-black-700 text-black-200 hover:text-802 disabled:opacity-30"
-                  >
-                    −
-                  </button>
-                  <button
-                    onClick={() => updateWeight(option.id, 1)}
-                    disabled={option.weight >= 5}
-                    className="w-6 h-6 flex items-center justify-center rounded bg-black-700 text-black-200 hover:text-802 disabled:opacity-30"
-                  >
-                    +
-                  </button>
+                  {unlocked && (
+                    <>
+                      <button
+                        onClick={() => updateWeight(option.id, -1)}
+                        disabled={option.weight <= 1}
+                        className="w-6 h-6 flex items-center justify-center rounded bg-black-700 text-black-200 hover:text-802 disabled:opacity-30"
+                      >
+                        −
+                      </button>
+                      <button
+                        onClick={() => updateWeight(option.id, 1)}
+                        disabled={option.weight >= 5}
+                        className="w-6 h-6 flex items-center justify-center rounded bg-black-700 text-black-200 hover:text-802 disabled:opacity-30"
+                      >
+                        +
+                      </button>
+                    </>
+                  )}
                 </div>
 
-                {/* Delete Button */}
-                <button
-                  onClick={() => removeOption(option.id)}
-                  disabled={options.length <= 1}
-                  className="w-8 h-8 flex items-center justify-center rounded text-black-400 hover:text-red-400 hover:bg-red-500/10 disabled:opacity-30"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                {/* Delete Button (requires unlock) */}
+                {unlocked && (
+                  <button
+                    onClick={() => removeOption(option.id)}
+                    disabled={options.length <= 1}
+                    className="w-8 h-8 flex items-center justify-center rounded text-black-400 hover:text-red-400 hover:bg-red-500/10 disabled:opacity-30"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             ))}
           </div>
