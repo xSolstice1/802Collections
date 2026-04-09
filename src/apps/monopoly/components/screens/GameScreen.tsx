@@ -21,7 +21,7 @@ import {
 import Board from '../Board/Board';
 import { useMonopolyGame } from '../../hooks/useMonopolyGame';
 import { useMonopolyStore } from '../../store/gameStore';
-import { subscribeToGameState } from '../../services/firebaseMonopoly';
+import { subscribeToGameState, setPlayerPresence, subscribeToPresence, updateGameState } from '../../services/firebaseMonopoly';
 import type { GameState } from '../../types';
 
 interface GameScreenProps {
@@ -48,6 +48,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ onGameEnd }) => {
     handleEndTurn,
     handlePayJailFine,
     handleRollDiceInJail,
+    removePlayer,
     toggleSound,
     toggleMusic,
     soundEnabled,
@@ -111,6 +112,43 @@ const GameScreen: React.FC<GameScreenProps> = ({ onGameEnd }) => {
 
     return () => unsub();
   }, [room?.id]);
+
+  // ============================================================================
+  // Player Presence — detect disconnects
+  // ============================================================================
+
+  useEffect(() => {
+    if (!room?.id || !currentUserId) return;
+
+    // Register our own presence + onDisconnect cleanup
+    setPlayerPresence(room.id, currentUserId).catch(console.error);
+
+    // Subscribe to all players' presence
+    const unsub = subscribeToPresence(room.id, (presence) => {
+      const state = useMonopolyStore.getState();
+      if (!state.gameState || state.gameState.phase !== 'playing') return;
+
+      // Check each player in the game — if they're missing from presence and not yet bankrupt, remove them
+      state.gameState.playerOrder.forEach((pid) => {
+        const player = state.gameState?.players[pid];
+        if (!player || player.isBankrupt) return;
+        if (pid === state.currentUserId) return; // don't remove ourselves
+
+        if (!presence[pid]) {
+          // Player went offline — clean them up
+          state.removePlayer(pid);
+
+          // Sync the updated state to Firebase
+          const freshState = useMonopolyStore.getState();
+          if (freshState.gameState && freshState.room?.id) {
+            updateGameState(freshState.room.id, freshState.gameState).catch(console.error);
+          }
+        }
+      });
+    });
+
+    return () => unsub();
+  }, [room?.id, currentUserId, removePlayer]);
 
   // ============================================================================
   // Game End Detection

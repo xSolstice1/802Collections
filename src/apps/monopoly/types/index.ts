@@ -189,14 +189,15 @@ export interface GameEvent {
   data?: Record<string, unknown>;
 }
 
-export type GameEventType = 
-  | 'dice_roll' 
-  | 'property_purchase' 
+export type GameEventType =
+  | 'dice_roll'
+  | 'property_purchase'
   | 'rent_paid'
-  | 'upgrade' 
-  | 'jail' 
-  | 'card_draw' 
+  | 'upgrade'
+  | 'jail'
+  | 'card_draw'
   | 'bankruptcy'
+  | 'player_left'
   | 'power_used'
   | 'trade'
   | 'game_start'

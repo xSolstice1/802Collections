@@ -48,7 +48,7 @@ const MonopolyApp: React.FC<MonopolyConfig> = ({
   const {
     gameState,
     room,
-    leaveRoom,
+    handleLeaveRoom,
     soundEnabled,
     musicEnabled,
   } = useMonopolyGame();
@@ -120,7 +120,7 @@ const MonopolyApp: React.FC<MonopolyConfig> = ({
           {room && (
             <button
               onClick={() => {
-                leaveRoom();
+                handleLeaveRoom();
                 setScreen('lobby');
               }}
               className="p-2 hover:bg-red-900/50 rounded-lg transition-colors"

@@ -151,6 +151,9 @@ interface MonopolyStore {
   applyCardEffect: (playerId: string, card: Card) => string;
   rollDiceInJail: (playerId: string) => { freed: boolean; dice: DiceResult };
 
+  // Player removal (disconnect / leave)
+  removePlayer: (playerId: string) => void;
+
   // Internal helpers
   addEvent: (type: GameEvent['type'], playerId: string, description: string) => void;
   bankruptPlayer: (playerId: string, creditorId?: string) => void;
@@ -1089,6 +1092,94 @@ export const useMonopolyStore = create<MonopolyStore>((set, get) => ({
     const state = get();
     if (!state.gameState) return [];
     return Object.values(state.gameState.players).filter(p => !p.isBankrupt);
+  },
+
+  // Player removal (disconnect / leave)
+  removePlayer: (playerId) => {
+    const state = get();
+    if (!state.gameState) return;
+
+    const player = state.gameState.players[playerId];
+    if (!player) return;
+
+    // --- Lobby phase: fully remove player from the room ---
+    if (state.gameState.phase !== 'playing') {
+      const { [playerId]: _, ...remainingPlayers } = state.gameState.players;
+      set({
+        gameState: {
+          ...state.gameState,
+          players: remainingPlayers,
+          playerOrder: state.gameState.playerOrder.filter(id => id !== playerId),
+        },
+      });
+      return;
+    }
+
+    // --- In-game: treat as bankrupt, release properties to bank ---
+    if (player.isBankrupt) return; // already gone
+
+    // Release all owned properties back to bank
+    const updatedProperties = { ...state.gameState.properties };
+    (player.properties || []).forEach((propId) => {
+      if (updatedProperties[propId]) {
+        updatedProperties[propId] = {
+          ...updatedProperties[propId],
+          owner: null,
+          upgrades: 0,
+          mortgaged: false,
+        };
+      }
+    });
+
+    // Mark player as bankrupt
+    const updatedPlayers = {
+      ...state.gameState.players,
+      [playerId]: {
+        ...player,
+        isBankrupt: true,
+        balance: 0,
+        properties: [],
+      },
+    };
+
+    const wasCurrentTurn = state.gameState.playerOrder[state.gameState.currentPlayerIndex] === playerId;
+
+    // Check for game over (< 2 non-bankrupt players)
+    const activePlayers = state.gameState.playerOrder.filter(id => !updatedPlayers[id]?.isBankrupt);
+
+    if (activePlayers.length < 2 && state.gameState.phase === 'playing') {
+      const winner = activePlayers.length === 1 ? updatedPlayers[activePlayers[0]] : null;
+      set({
+        room: state.room ? { ...state.room, status: 'finished', finishedAt: Date.now() } : null,
+        gameState: {
+          ...state.gameState,
+          properties: updatedProperties,
+          players: updatedPlayers,
+          phase: 'finished',
+          winnerId: winner?.id || null,
+        },
+      });
+      if (winner) {
+        get().addEvent('game_end', winner.id, `${winner.name} wins!`);
+      }
+      return;
+    }
+
+    // Update state
+    set({
+      gameState: {
+        ...state.gameState,
+        properties: updatedProperties,
+        players: updatedPlayers,
+      },
+    });
+
+    get().addEvent('player_left', playerId, `${player.name} left the game. Properties released to bank.`);
+
+    // If it was their turn, advance to next player
+    if (wasCurrentTurn) {
+      get().endTurn();
+    }
   },
 
   // Helper - Add event (internal)
