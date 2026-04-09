@@ -4,9 +4,12 @@
  * Room creation and joining interface for the Monopoly game
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Users, Play, Copy, Check, Sparkles, Gamepad2 } from 'lucide-react';
 import { useMonopolyGame } from '../../hooks/useMonopolyGame';
+import { getRoomByInviteCode, saveRoom, setPlayerInRoom, subscribeToGameState, subscribeToPlayers, subscribeToRoom, updateGameState, updateRoomStatus } from '../../services/firebaseMonopoly';
+import { useMonopolyStore } from '../../store/gameStore';
+import type { Player } from '../../types';
 
 interface LobbyScreenProps {
   onGameStart?: () => void;
@@ -24,6 +27,7 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onGameStart }) => {
     joinRoom,
     startGame,
     setNotification,
+    syncPlayers,
     playSound,
   } = useMonopolyGame();
 
@@ -34,7 +38,47 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onGameStart }) => {
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
 
-  const handleCreateRoom = (e: React.FormEvent) => {
+  // Subscribe to Firebase player updates when in a room
+  useEffect(() => {
+    if (!room) return;
+
+    const unsubPlayers = subscribeToPlayers(room.id, (players) => {
+      if (players.length > 0) {
+        syncPlayers(players);
+      }
+    });
+
+    // Subscribe to room status changes (so guests see when host starts the game)
+    const unsubRoom = subscribeToRoom(room.id, (updatedRoom) => {
+      if (updatedRoom?.status === 'playing' && onGameStart) {
+        onGameStart();
+      }
+    });
+
+    // Also subscribe to game state phase as fallback (in case room status update fails)
+    const unsubGame = subscribeToGameState(room.id, (gameState) => {
+      if (gameState?.phase === 'playing' && onGameStart) {
+        onGameStart();
+      }
+    });
+
+    return () => {
+      unsubPlayers();
+      unsubRoom();
+      unsubGame();
+    };
+  }, [room?.id]);
+
+  const writePlayerToFirebase = async (roomId: string, player: Player | null) => {
+    if (!player) return;
+    try {
+      await setPlayerInRoom(roomId, player);
+    } catch (err) {
+      console.error('Failed to sync player to Firebase:', err);
+    }
+  };
+
+  const handleCreateRoom = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!roomName.trim()) {
       setError('Please enter a room name');
@@ -47,12 +91,29 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onGameStart }) => {
 
     playSound('click');
     const newRoom = createRoom(roomName);
-    joinRoom(newRoom.id, playerName);
+    const player = joinRoom(newRoom.id, playerName);
+
+    // Update hostId to the actual player ID before saving to Firebase
+    if (player) {
+      newRoom.hostId = player.id;
+    }
+
+    // Persist room and player to Firebase
+    try {
+      await saveRoom(newRoom);
+      await writePlayerToFirebase(newRoom.id, player);
+    } catch (err) {
+      console.error('Failed to save room to Firebase:', err);
+      setNotification({ message: 'Room created locally, but others may not be able to join.', type: 'error' });
+    }
+
     setNotification({ message: `Room "${roomName}" created!`, type: 'success' });
     setError('');
   };
 
-  const handleJoinRoom = (e: React.FormEvent) => {
+  const [joining, setJoining] = useState(false);
+
+  const handleJoinRoom = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inviteCode.trim()) {
       setError('Please enter an invite code');
@@ -64,29 +125,60 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onGameStart }) => {
     }
 
     playSound('click');
-    
-    // Create a room ID from the invite code for local play
-    const roomId = `room_${inviteCode}`;
-    
-    // Join the room
-    const success = joinRoom(roomId, playerName);
-    
-    if (success) {
-      setNotification({ message: `Joined room ${inviteCode}!`, type: 'success' });
-    } else {
-      setError('Failed to join room. It may be full.');
-    }
-    
+    setJoining(true);
     setError('');
+
+    try {
+      // Look up the actual room from Firebase using the invite code
+      const foundRoom = await getRoomByInviteCode(inviteCode);
+
+      if (!foundRoom) {
+        setError('Room not found. Check the invite code and try again.');
+        setJoining(false);
+        return;
+      }
+
+      // Join the room using the real room ID from Firebase
+      const player = joinRoom(foundRoom.id, playerName, foundRoom);
+
+      if (player) {
+        await writePlayerToFirebase(foundRoom.id, player);
+        setNotification({ message: `Joined room "${foundRoom.name}"!`, type: 'success' });
+      } else {
+        setError('Failed to join room. It may be full.');
+      }
+    } catch (err) {
+      console.error('Failed to join room:', err);
+      setError('Could not connect to server. Please try again.');
+    } finally {
+      setJoining(false);
+    }
   };
 
-  const handleStartGame = () => {
-    if (!canStartGame) return;
-    
+  const handleStartGame = async () => {
+    if (!canStartGame || !room) return;
+
     playSound('game_start');
     const started = startGame();
-    if (started && onGameStart) {
-      onGameStart();
+    if (started) {
+      // Write full game state to Firebase so guests receive initialized game data
+      try {
+        const freshState = useMonopolyStore.getState();
+        if (freshState.gameState) {
+          await updateGameState(room.id, freshState.gameState);
+        }
+      } catch (err) {
+        console.error('Failed to sync game state:', err);
+      }
+
+      // Update room status separately so it runs even if gameState write fails
+      try {
+        await updateRoomStatus(room.id, 'playing');
+      } catch (err) {
+        console.error('Failed to sync room status:', err);
+      }
+
+      onGameStart?.();
     }
   };
 
@@ -390,10 +482,11 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onGameStart }) => {
 
               <button
                 type="submit"
-                className="w-full flex items-center justify-center gap-2 bg-[#44D62C] hover:bg-[#3bc428] text-black font-bold py-3 px-6 rounded-lg transition-all duration-200"
+                disabled={joining}
+                className="w-full flex items-center justify-center gap-2 bg-[#44D62C] hover:bg-[#3bc428] disabled:bg-gray-600 disabled:cursor-not-allowed text-black font-bold py-3 px-6 rounded-lg transition-all duration-200"
               >
                 <Users className="w-5 h-5" />
-                Join Room
+                {joining ? 'Joining...' : 'Join Room'}
               </button>
             </form>
           )}

@@ -207,6 +207,7 @@ export interface GameState {
   phase: GamePhase;
   currentPlayerIndex: number;
   turnPhase: TurnPhase;
+  playerOrder: string[]; // Ordered array of player IDs for turn sequence
   players: Record<string, Player>;
   properties: Record<string, Property>;
   board: BoardSpace[];
@@ -218,6 +219,12 @@ export interface GameState {
   turnStartTime: number;
   winnerId: string | null;
   doublesExtraRoll: boolean;
+}
+
+export interface LandingResult {
+  type: 'nothing' | 'rent' | 'tax' | 'card' | 'jail' | 'unowned_property' | 'own_property';
+  message: string;
+  card?: Card;
 }
 
 // ============================================================================

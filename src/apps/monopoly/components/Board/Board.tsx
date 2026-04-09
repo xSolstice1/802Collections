@@ -111,28 +111,30 @@ const Board: React.FC<BoardProps> = ({
         }}
         onMouseLeave={() => onSpaceHover?.(null)}
       >
-        {boardGrid.map((space, rowIdx) =>
-          space.map((boardSpace, colIdx) => {
+        {boardGrid.map((row, rowIdx) =>
+          row.map((boardSpace, colIdx) => {
+            const gridStyle = { gridRow: rowIdx + 1, gridColumn: colIdx + 1 };
+
             if (!boardSpace) {
               // Center area
               if (rowIdx > 0 && rowIdx < 10 && colIdx > 0 && colIdx < 10) {
                 if (rowIdx === 1 && colIdx === 1) {
                   return (
                     <div
-                      key={`center-${rowIdx}-${colIdx}`}
-                      className="row-span-9 col-span-9"
-                      style={{ gridRow: '2 / 10', gridColumn: '2 / 10' }}
+                      key="center"
+                      style={{ gridRow: '2 / 11', gridColumn: '2 / 11' }}
                     >
                       {centerContent}
                     </div>
                   );
                 }
-                return null;
+                return null; // Covered by center content
               }
               return (
                 <div
                   key={`empty-${rowIdx}-${colIdx}`}
                   className="bg-black/40 min-h-[60px] min-w-[60px]"
+                  style={gridStyle}
                 />
               );
             }
@@ -141,14 +143,15 @@ const Board: React.FC<BoardProps> = ({
             const isSelected = selectedSpace === boardSpace.position;
 
             return (
-              <BoardTile
-                key={boardSpace.position}
-                space={boardSpace}
-                players={playersHere}
-                isSelected={isSelected}
-                onClick={() => onSpaceClick?.(boardSpace.position)}
-                onHover={() => onSpaceHover?.(boardSpace.position)}
-              />
+              <div key={boardSpace.position} style={gridStyle}>
+                <BoardTile
+                  space={boardSpace}
+                  players={playersHere}
+                  isSelected={isSelected}
+                  onClick={() => onSpaceClick?.(boardSpace.position)}
+                  onHover={() => onSpaceHover?.(boardSpace.position)}
+                />
+              </div>
             );
           })
         )}

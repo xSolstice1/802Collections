@@ -31,7 +31,6 @@ import type {
 // ============================================================================
 
 const ROOMS_REF = ref(rtdb, 'rooms');
-
 export const getRoomRef = (roomId: string) => ref(rtdb, `rooms/${roomId}`);
 export const getRoomGameRef = (roomId: string) => ref(rtdb, `rooms/${roomId}/gameState`);
 export const getRoomPlayersRef = (roomId: string) => ref(rtdb, `rooms/${roomId}/players`);
@@ -102,19 +101,10 @@ export const getRoom = async (roomId: string): Promise<Room | null> => {
 };
 
 /**
- * Get a room by invite code
+ * Get a room by invite code (invite code is used as the room ID)
  */
 export const getRoomByInviteCode = async (inviteCode: string): Promise<Room | null> => {
-  const snapshot = await get(ROOMS_REF);
-  if (!snapshot.exists()) return null;
-
-  const rooms = snapshot.val() as Record<string, { room: Room }>;
-  for (const [roomId, data] of Object.entries(rooms)) {
-    if (data.room.inviteCode === inviteCode && data.room.status === 'waiting') {
-      return { ...data.room, id: roomId };
-    }
-  }
-  return null;
+  return getRoom(inviteCode);
 };
 
 /**
@@ -129,6 +119,13 @@ export const updateRoomStatus = async (
     ...(status === 'playing' ? { 'room.startedAt': Date.now() } : {}),
     ...(status === 'finished' ? { 'room.finishedAt': Date.now() } : {}),
   });
+};
+
+/**
+ * Save a room to Firebase (used to persist locally-created rooms)
+ */
+export const saveRoom = async (room: Room): Promise<void> => {
+  await set(getRoomRef(room.id), { room });
 };
 
 /**
@@ -159,6 +156,16 @@ export const addPlayerToRoom = async (
 
   await set(playerRef, newPlayer);
   return newPlayer;
+};
+
+/**
+ * Set a player in a room using an existing player ID
+ */
+export const setPlayerInRoom = async (
+  roomId: string,
+  player: Player
+): Promise<void> => {
+  await set(ref(rtdb, `rooms/${roomId}/players/${player.id}`), player);
 };
 
 /**
@@ -291,6 +298,7 @@ const createInitialGameState = (roomId: string): GameState => ({
   phase: 'lobby',
   currentPlayerIndex: 0,
   turnPhase: 'rolling',
+  playerOrder: [],
   players: {},
   properties: {},
   board: [],
@@ -313,6 +321,7 @@ export default {
   createRoom,
   getRoom,
   getRoomByInviteCode,
+  saveRoom,
   updateRoomStatus,
   deleteRoom,
   getRoomRef,
