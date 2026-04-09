@@ -1,19 +1,18 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { Plus, Trash2, RotateCcw, Utensils, Volume2, VolumeX } from 'lucide-react';
-
-interface WheelOption {
-  id: string;
-  name: string;
-  weight: number;
-  color: string;
-}
+import {
+  subscribeToOptions,
+  setAllOptions,
+  upsertOption,
+  removeOption as fbRemoveOption,
+  updateOption,
+} from './services/firebaseWheel';
+import type { WheelOption } from './services/firebaseWheel';
 
 const COLORS = [
   '#44D62C', '#37ad24', '#6ae04a', '#2d8f17', '#55c435',
   '#1e6b0f', '#78e85e', '#0f5507', '#8af072', '#0a3d05'
 ];
-
-const STORAGE_KEY = 'wheel-of-lunch-options';
 
 const defaultOptions: WheelOption[] = [
   { id: '1', name: 'Timbre+', weight: 1, color: COLORS[0] },
@@ -25,28 +24,13 @@ const defaultOptions: WheelOption[] = [
 
 /**
  * Wheel of Lunch App
- * 
+ *
  * A spinning wheel to help decide where to eat or what to choose.
- * Users can add/remove options and set weightage for each.
+ * Options are persisted in Firebase so everyone shares the same wheel.
  */
 const WheelOfLunchApp = () => {
-  // Load options from localStorage or use defaults
-  const loadOptions = (): WheelOption[] => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
-        }
-      }
-    } catch {
-      // Ignore errors
-    }
-    return defaultOptions;
-  };
-
-  const [options, setOptions] = useState<WheelOption[]>(loadOptions);
+  const [options, setOptions] = useState<WheelOption[]>(defaultOptions);
+  const [loaded, setLoaded] = useState(false);
   const [newOption, setNewOption] = useState('');
   const [spinning, setSpinning] = useState(false);
   const [rotation, setRotation] = useState(0);
@@ -58,10 +42,19 @@ const WheelOfLunchApp = () => {
   const clickIntervalRef = useRef<number | null>(null);
   const spinningRef = useRef(false);
 
-  // Save options to localStorage whenever they change
+  // Subscribe to Firebase options — shared across all users in real-time
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(options));
-  }, [options]);
+    const unsub = subscribeToOptions((remote) => {
+      if (remote.length > 0) {
+        setOptions(remote);
+      } else if (!loaded) {
+        // First load and nothing in Firebase yet — seed with defaults
+        setAllOptions(defaultOptions);
+      }
+      setLoaded(true);
+    });
+    return () => unsub();
+  }, []);
 
   // Calculate total weight
   const totalWeight = options.reduce((sum, opt) => sum + opt.weight, 0);
@@ -342,7 +335,7 @@ const WheelOfLunchApp = () => {
     }, 4000);
   }, [spinning, options, rotation, totalWeight, muted, playCelebrationSound, playClickSound]);
 
-  // Add new option
+  // Add new option → Firebase (subscription will update local state)
   const addOption = () => {
     if (!newOption.trim()) return;
 
@@ -353,47 +346,39 @@ const WheelOfLunchApp = () => {
       color: COLORS[options.length % COLORS.length],
     };
 
-    setOptions([...options, newOpt]);
+    upsertOption(newOpt);
     setNewOption('');
   };
 
-  // Remove option
+  // Remove option → Firebase
   const removeOption = (id: string) => {
     if (options.length <= 1) return;
-    setOptions(options.filter(opt => opt.id !== id));
+    fbRemoveOption(id);
   };
 
-  // Update weight
+  // Update weight → Firebase
   const updateWeight = (id: string, delta: number) => {
-    setOptions(options.map(opt => {
-      if (opt.id === id) {
-        return { ...opt, weight: Math.max(1, opt.weight + delta) };
-      }
-      return opt;
-    }));
+    const opt = options.find(o => o.id === id);
+    if (!opt) return;
+    updateOption(id, { weight: Math.max(1, opt.weight + delta) });
   };
 
-  // Update color
+  // Update color → Firebase
   const updateColor = (id: string, color: string) => {
-    setOptions(options.map(opt => {
-      if (opt.id === id) {
-        return { ...opt, color };
-      }
-      return opt;
-    }));
+    updateOption(id, { color });
   };
 
-  // Reset wheel
+  // Reset wheel (local UI only — doesn't touch options)
   const reset = () => {
     setRotation(0);
     setWinner(null);
     setSpinning(false);
   };
 
-  // Clear all and reset to defaults
+  // Clear all and reset to defaults → Firebase
   const clearAll = () => {
     if (confirm('Reset to default options?')) {
-      setOptions(defaultOptions);
+      setAllOptions(defaultOptions);
       reset();
     }
   };
@@ -567,7 +552,7 @@ const WheelOfLunchApp = () => {
           {/* Info */}
           <div className="mt-4 p-3 rounded-lg bg-black-800/50 border border-black-700">
             <p className="text-xs text-black-400">
-              <span className="font-bold text-black-200">Tip:</span> Higher weight = bigger slice = more likely to win! Your options are saved automatically.
+              <span className="font-bold text-black-200">Tip:</span> Higher weight = bigger slice = more likely to win! Options are synced for everyone in real-time.
             </p>
           </div>
         </div>
