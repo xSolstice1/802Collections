@@ -16,6 +16,7 @@ import type {
   GamePhase,
   TurnPhase,
   Card,
+  LandingResult,
 } from '../types';
 import { PROPERTIES, BOARD_SPACES, MARKET_EVENT_CARDS, CORPORATE_ACTION_CARDS } from '../data/board';
 import { CORPORATE_POWERS, DEFAULT_ROOM_SETTINGS } from '../types';
@@ -29,6 +30,7 @@ const createInitialGameState = (roomId: string, players: Player[]): GameState =>
   phase: 'lobby',
   currentPlayerIndex: 0,
   turnPhase: 'rolling',
+  playerOrder: players.map(p => p.id),
   players: players.reduce((acc, player) => {
     acc[player.id] = player;
     return acc;
@@ -108,7 +110,7 @@ interface MonopolyStore {
   
   // Actions - Room
   createRoom: (name: string, settings?: Partial<RoomSettings>) => Room;
-  joinRoom: (roomId: string, playerName: string) => boolean;
+  joinRoom: (roomId: string, playerName: string, existingRoom?: Room) => Player | null;
   leaveRoom: () => void;
   setCurrentUser: (userId: string) => void;
   startGame: () => boolean;
@@ -136,12 +138,19 @@ interface MonopolyStore {
   
   // Actions - Firebase sync
   syncFromFirebase: (room: Room, gameState: GameState) => void;
+  syncPlayers: (players: Player[]) => void;
   
   // Getters
   getCurrentPlayer: () => Player | null;
   getPlayerAtPosition: (position: number) => Player[];
   getPropertyOwner: (propertyId: string) => Player | null;
   getActivePlayers: () => Player[];
+
+  // Actions - New game logic
+  calculateRent: (property: Property, diceRoll?: number) => number;
+  processLanding: (playerId: string, diceTotal: number) => LandingResult;
+  applyCardEffect: (playerId: string, card: Card) => string;
+  rollDiceInJail: (playerId: string) => { freed: boolean; dice: DiceResult };
 
   // Internal helpers
   addEvent: (type: GameEvent['type'], playerId: string, description: string) => void;
@@ -166,11 +175,12 @@ export const useMonopolyStore = create<MonopolyStore>((set, get) => ({
 
   // Room Actions
   createRoom: (name, settings = {}) => {
-    const roomId = `room_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    // Use invite code as the room ID so guests can look it up directly
+    const inviteCode = Math.random().toString(36).substr(2, 6).toUpperCase();
     const finalSettings = { ...DEFAULT_ROOM_SETTINGS, ...settings };
-    
+
     const room: Room = {
-      id: roomId,
+      id: inviteCode,
       name,
       hostId: get().currentUserId || 'guest',
       status: 'waiting',
@@ -178,23 +188,23 @@ export const useMonopolyStore = create<MonopolyStore>((set, get) => ({
       minPlayers: 2,
       createdAt: Date.now(),
       settings: finalSettings,
-      inviteCode: Math.random().toString(36).substr(2, 6).toUpperCase(),
+      inviteCode,
     };
 
-    set({ 
+    set({
       room,
-      gameState: createInitialGameState(roomId, []),
+      gameState: createInitialGameState(inviteCode, []),
     });
 
     return room;
   },
 
-  joinRoom: (roomId, playerName) => {
+  joinRoom: (roomId, playerName, existingRoom?) => {
     const state = get();
-    
-    // If no room exists, create a basic room structure for local play
+
+    // If no room exists, use the provided room or create a basic room structure for local play
     if (!state.room) {
-      const room: Room = {
+      const room: Room = existingRoom || {
         id: roomId,
         name: 'Room ' + roomId.slice(-4),
         hostId: 'host',
@@ -204,7 +214,7 @@ export const useMonopolyStore = create<MonopolyStore>((set, get) => ({
         createdAt: Date.now(),
         settings: DEFAULT_ROOM_SETTINGS,
       };
-      
+
       set({ room });
     }
     
@@ -218,7 +228,7 @@ export const useMonopolyStore = create<MonopolyStore>((set, get) => ({
     const currentState = get();
     const playerCount = Object.keys(currentState.gameState!.players).length;
     
-    if (playerCount >= (currentState.room?.maxPlayers || 6)) return false;
+    if (playerCount >= (currentState.room?.maxPlayers || 6)) return null;
 
     const playerId = `player_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const playerIndex = playerCount;
@@ -227,18 +237,23 @@ export const useMonopolyStore = create<MonopolyStore>((set, get) => ({
 
     const player = createPlayer(playerId, playerName, color, startingBalance);
 
+    // Only claim host if room has placeholder hostId (i.e., creator before any player joined)
+    const isFirstPlayer = playerCount === 0 && currentState.room?.hostId === 'guest';
+
     set((state) => ({
       currentUserId: playerId,
+      room: isFirstPlayer && state.room ? { ...state.room, hostId: playerId } : state.room,
       gameState: {
         ...state.gameState!,
         players: {
           ...state.gameState!.players,
           [playerId]: player,
         },
+        playerOrder: [...state.gameState!.playerOrder, playerId],
       },
     }));
 
-    return true;
+    return player;
   },
 
   leaveRoom: () => {
@@ -275,6 +290,7 @@ export const useMonopolyStore = create<MonopolyStore>((set, get) => ({
         ...state.gameState,
         phase: 'playing',
         currentPlayerIndex: Math.floor(Math.random() * playerCount),
+        playerOrder: Object.keys(state.gameState.players),
         turnStartTime: Date.now(),
       },
       marketEventDeck: shuffledMarket,
@@ -370,7 +386,7 @@ export const useMonopolyStore = create<MonopolyStore>((set, get) => ({
     const player = state.gameState.players[playerId];
     const property = state.gameState.properties[propertyId];
 
-    if (!player || !property || property.owner !== null) return false;
+    if (!player || !property || property.owner) return false;
     if (player.balance < property.price) return false;
 
     const updatedPlayer: Player = {
@@ -417,8 +433,19 @@ export const useMonopolyStore = create<MonopolyStore>((set, get) => ({
 
     if (!player || !property) return false;
     if (property.owner !== playerId) return false;
-    if (property.upgrades >= 5) return false; // Max 5 (4 upgrades + HQ)
+    if (property.type !== 'property') return false; // Can't upgrade railroads/utilities
+    if (property.upgrades >= 5) return false; // Max: 4 houses + 1 hotel
     if (player.balance < property.upgradeCost) return false;
+
+    // Must own all properties of the color group (monopoly required)
+    const allOfColor = Object.values(state.gameState.properties).filter(
+      p => p.color === property.color && p.type === 'property'
+    );
+    if (!allOfColor.every(p => p.owner === playerId)) return false;
+
+    // Even building rule: can only build on property with fewest houses
+    const minUpgrades = Math.min(...allOfColor.map(p => p.upgrades));
+    if (property.upgrades > minUpgrades) return false;
 
     const updatedPlayer: Player = {
       ...player,
@@ -444,8 +471,8 @@ export const useMonopolyStore = create<MonopolyStore>((set, get) => ({
       },
     }));
 
-    // Add upgrade event
-    const upgradeLabel = property.upgrades + 1 >= 5 ? 'HQ' : `Upgrade ${property.upgrades + 1}`;
+    const level = property.upgrades + 1;
+    const upgradeLabel = level >= 5 ? 'a Hotel' : `House ${level}`;
     get().addEvent(
       'upgrade',
       playerId,
@@ -507,12 +534,12 @@ export const useMonopolyStore = create<MonopolyStore>((set, get) => ({
     const state = get();
     if (!state.gameState) return;
 
-    const players = Object.values(state.gameState.players).filter(p => !p.isBankrupt);
-    const playerCount = players.length;
-    
-    if (playerCount < 2) {
-      // Game over
-      const winner = players[0];
+    const { playerOrder, players, currentPlayerIndex } = state.gameState;
+    if (!playerOrder || playerOrder.length === 0) return;
+
+    const activePlayers = playerOrder.filter(id => !players[id]?.isBankrupt);
+    if (activePlayers.length < 2) {
+      const winner = players[activePlayers[0]];
       set({
         room: state.room ? { ...state.room, status: 'finished', finishedAt: Date.now() } : null,
         gameState: {
@@ -525,7 +552,10 @@ export const useMonopolyStore = create<MonopolyStore>((set, get) => ({
       return;
     }
 
-    const nextIndex = (state.gameState.currentPlayerIndex + 1) % playerCount;
+    let nextIndex = currentPlayerIndex;
+    do {
+      nextIndex = (nextIndex + 1) % playerOrder.length;
+    } while (players[playerOrder[nextIndex]]?.isBankrupt);
 
     set({
       gameState: {
@@ -692,13 +722,354 @@ export const useMonopolyStore = create<MonopolyStore>((set, get) => ({
     set({ room, gameState });
   },
 
+  syncPlayers: (players) => {
+    set((state) => {
+      if (!state.gameState) return {};
+
+      const synced = players.reduce((acc, p) => {
+        // Firebase drops empty arrays, so ensure defaults
+        acc[p.id] = { ...p, properties: p.properties || [] };
+        return acc;
+      }, {} as Record<string, Player>);
+
+      // Preserve current user's local player if not yet in Firebase
+      const myId = state.currentUserId;
+      if (myId && !synced[myId] && state.gameState.players[myId]) {
+        synced[myId] = state.gameState.players[myId];
+      }
+
+      return {
+        gameState: {
+          ...state.gameState,
+          players: synced,
+        },
+      };
+    });
+  },
+
+  // New game logic
+  calculateRent: (property, diceRoll?) => {
+    const state = get();
+    if (!state.gameState || property.mortgaged) return 0;
+
+    let rent = 0;
+
+    if (property.type === 'railroad') {
+      // $25, $50, $100, $200 for 1-4 railroads
+      const owner = property.owner ? state.gameState.players[property.owner] : null;
+      if (owner) {
+        const railroadCount = (owner.properties || []).filter(
+          (pid) => state.gameState?.properties[pid]?.type === 'railroad'
+        ).length;
+        rent = 25 * Math.pow(2, railroadCount - 1);
+      }
+    } else if (property.type === 'utility') {
+      // 4x dice roll for 1 utility, 10x for 2
+      const owner = property.owner ? state.gameState.players[property.owner] : null;
+      if (owner) {
+        const utilityCount = (owner.properties || []).filter(
+          (pid) => state.gameState?.properties[pid]?.type === 'utility'
+        ).length;
+        rent = (diceRoll || 7) * (utilityCount === 2 ? 10 : 4);
+      }
+    } else {
+      // Regular property — Monopoly-style rent multipliers
+      if (property.upgrades > 0) {
+        // Rent with houses/hotel (based on real Monopoly ratios)
+        const multipliers = [1, 5, 15, 45, 80, 125];
+        rent = Math.ceil(property.rent * multipliers[property.upgrades]);
+      } else {
+        rent = property.rent;
+        // Monopoly bonus: owning all properties of a color doubles base rent
+        if (property.owner) {
+          const allOfColor = Object.values(state.gameState.properties).filter(
+            p => p.color === property.color && p.type === 'property'
+          );
+          const allOwned = allOfColor.every(p => p.owner === property.owner);
+          if (allOwned) {
+            rent *= 2;
+          }
+        }
+      }
+    }
+
+    if (state.gameState.marketCrashActive) {
+      rent = Math.floor(rent / 2);
+    }
+
+    return rent;
+  },
+
+  processLanding: (playerId, diceTotal) => {
+    const state = get();
+    if (!state.gameState) return { type: 'nothing', message: '' };
+
+    const player = state.gameState.players[playerId];
+    if (!player) return { type: 'nothing', message: '' };
+    const space = state.gameState.board[player.position];
+    if (!space) return { type: 'nothing', message: `Landed on position ${player.position}` };
+
+    switch (space.type) {
+      case 'property':
+      case 'railroad':
+      case 'utility': {
+        if (!space.propertyId) return { type: 'nothing', message: '' };
+        const property = state.gameState.properties[space.propertyId];
+        if (!property) return { type: 'nothing', message: '' };
+
+        if (!property.owner) {
+          return { type: 'unowned_property', message: `${space.name} is available for $${property.price}` };
+        } else if (property.owner === playerId) {
+          return { type: 'own_property', message: `You own ${space.name}` };
+        } else if (!property.mortgaged) {
+          const rent = get().calculateRent(property, diceTotal);
+          const ownerName = state.gameState.players[property.owner]?.name || 'Unknown';
+          get().payRent(playerId, property.owner, rent);
+          return { type: 'rent', message: `Paid $${rent} rent to ${ownerName}` };
+        }
+        return { type: 'nothing', message: '' };
+      }
+
+      case 'tax': {
+        const isIncomeTax = space.position === 4;
+        const amount = isIncomeTax
+          ? (state.room?.settings.incomeTaxAmount || 200)
+          : (state.room?.settings.luxuryTaxAmount || 100);
+
+        const updatedPlayer = { ...player, balance: player.balance - amount };
+        if (updatedPlayer.balance < 0) {
+          get().bankruptPlayer(playerId);
+          return { type: 'tax', message: `Bankrupt from ${space.name}!` };
+        }
+        set((s) => ({
+          gameState: s.gameState ? {
+            ...s.gameState,
+            players: { ...s.gameState.players, [playerId]: updatedPlayer },
+          } : s.gameState,
+        }));
+        get().addEvent('rent_paid', playerId, `${player.name} paid $${amount} in taxes`);
+        return { type: 'tax', message: `Paid $${amount} ${space.name}` };
+      }
+
+      case 'chance': {
+        const card = get().drawMarketEvent(playerId);
+        if (card) {
+          const msg = get().applyCardEffect(playerId, card);
+          return { type: 'card', message: msg, card };
+        }
+        return { type: 'nothing', message: '' };
+      }
+
+      case 'communityChest': {
+        const card = get().drawCorporateAction(playerId);
+        if (card) {
+          const msg = get().applyCardEffect(playerId, card);
+          return { type: 'card', message: msg, card };
+        }
+        return { type: 'nothing', message: '' };
+      }
+
+      case 'corner': {
+        if (space.position === 30) {
+          get().goToJail(playerId);
+          return { type: 'jail', message: 'Sent to Headquarters!' };
+        }
+        return { type: 'nothing', message: `Landed on ${space.name}` };
+      }
+
+      default:
+        return { type: 'nothing', message: '' };
+    }
+  },
+
+  applyCardEffect: (playerId, card) => {
+    const state = get();
+    if (!state.gameState) return card.description;
+
+    const player = state.gameState.players[playerId];
+    if (!player) return card.description;
+
+    const effect = card.effect;
+
+    switch (effect.type) {
+      case 'collect': {
+        const updated = { ...player, balance: player.balance + (effect.value || 0) };
+        set((s) => ({
+          gameState: s.gameState ? {
+            ...s.gameState,
+            players: { ...s.gameState.players, [playerId]: updated },
+          } : s.gameState,
+        }));
+        return `${card.title}: Collected $${effect.value}`;
+      }
+
+      case 'pay': {
+        const amount = effect.value || 0;
+        const updated = { ...player, balance: player.balance - amount };
+        if (updated.balance < 0) {
+          get().bankruptPlayer(playerId);
+          return `${card.title}: Bankrupt!`;
+        }
+        set((s) => ({
+          gameState: s.gameState ? {
+            ...s.gameState,
+            players: { ...s.gameState.players, [playerId]: updated },
+          } : s.gameState,
+        }));
+        return `${card.title}: Paid $${amount}`;
+      }
+
+      case 'moveTo': {
+        const targetPos = effect.value || 0;
+        const passedGo = targetPos <= player.position && targetPos === 0;
+        const salary = passedGo ? (state.room?.settings.salaryAmount || 200) : 0;
+        const updated = { ...player, position: targetPos, balance: player.balance + salary };
+        set((s) => ({
+          gameState: s.gameState ? {
+            ...s.gameState,
+            players: { ...s.gameState.players, [playerId]: updated },
+          } : s.gameState,
+        }));
+        return `${card.title}: Moved to ${state.gameState.board[targetPos]?.name || 'GO'}${salary > 0 ? ` and collected $${salary}` : ''}`;
+      }
+
+      case 'jail': {
+        get().goToJail(playerId);
+        return `${card.title}: Sent to Headquarters!`;
+      }
+
+      case 'getOutOfJail': {
+        if (player.inJail) {
+          const updated = { ...player, inJail: false, jailTurns: 0 };
+          set((s) => ({
+            gameState: s.gameState ? {
+              ...s.gameState,
+              players: { ...s.gameState.players, [playerId]: updated },
+            } : s.gameState,
+          }));
+        }
+        return `${card.title}: Get Out of HQ Free!`;
+      }
+
+      case 'steal': {
+        const amount = effect.value || 0;
+        const others = Object.values(state.gameState.players).filter(p => p.id !== playerId && !p.isBankrupt);
+        const richest = others.sort((a, b) => b.balance - a.balance)[0];
+        if (richest) {
+          const stealAmount = Math.min(amount, richest.balance);
+          const updatedPlayer = { ...player, balance: player.balance + stealAmount };
+          const updatedRichest = { ...richest, balance: richest.balance - stealAmount };
+          set((s) => ({
+            gameState: s.gameState ? {
+              ...s.gameState,
+              players: {
+                ...s.gameState.players,
+                [playerId]: updatedPlayer,
+                [richest.id]: updatedRichest,
+              },
+            } : s.gameState,
+          }));
+          return `${card.title}: Stole $${stealAmount} from ${richest.name}`;
+        }
+        return `${card.title}: No one to steal from!`;
+      }
+
+      case 'repair': {
+        let totalCost = 0;
+        (player.properties || []).forEach((propId) => {
+          const prop = state.gameState?.properties[propId];
+          if (prop && prop.upgrades > 0) {
+            if (prop.upgrades >= 5) {
+              totalCost += card.type === 'marketEvent' ? 100 : 80;
+            } else {
+              totalCost += prop.upgrades * (card.type === 'marketEvent' ? 50 : 40);
+            }
+          }
+        });
+        if (totalCost > 0) {
+          const updated = { ...player, balance: player.balance - totalCost };
+          if (updated.balance < 0) {
+            get().bankruptPlayer(playerId);
+            return `${card.title}: Bankrupt from repairs!`;
+          }
+          set((s) => ({
+            gameState: s.gameState ? {
+              ...s.gameState,
+              players: { ...s.gameState.players, [playerId]: updated },
+            } : s.gameState,
+          }));
+        }
+        return `${card.title}: Paid $${totalCost} in repairs`;
+      }
+
+      default:
+        return card.description;
+    }
+  },
+
+  rollDiceInJail: (playerId) => {
+    const die1 = Math.floor(Math.random() * 6) + 1;
+    const die2 = Math.floor(Math.random() * 6) + 1;
+    const isDoubles = die1 === die2;
+    const diceResult: DiceResult = { die1, die2, total: die1 + die2, isDoubles, timestamp: Date.now() };
+
+    const state = get();
+    if (!state.gameState) return { freed: false, dice: diceResult };
+    const player = state.gameState.players[playerId];
+    if (!player) return { freed: false, dice: diceResult };
+
+    if (isDoubles) {
+      // Freed! Move the player
+      const updated = { ...player, inJail: false, jailTurns: 0 };
+      set((s) => ({
+        gameState: s.gameState ? {
+          ...s.gameState,
+          dice: diceResult,
+          players: { ...s.gameState.players, [playerId]: updated },
+        } : s.gameState,
+      }));
+      get().movePlayer(playerId, diceResult.total);
+      return { freed: true, dice: diceResult };
+    } else {
+      const newJailTurns = player.jailTurns + 1;
+      if (newJailTurns >= 3) {
+        // Forced to pay fine after 3 failed attempts
+        const fine = state.room?.settings.jailFines || 50;
+        const updated = { ...player, inJail: false, jailTurns: 0, balance: player.balance - fine };
+        if (updated.balance < 0) {
+          get().bankruptPlayer(playerId);
+          set((s) => ({ gameState: s.gameState ? { ...s.gameState, dice: diceResult } : s.gameState }));
+          return { freed: false, dice: diceResult };
+        }
+        set((s) => ({
+          gameState: s.gameState ? {
+            ...s.gameState,
+            dice: diceResult,
+            players: { ...s.gameState.players, [playerId]: updated },
+          } : s.gameState,
+        }));
+        get().addEvent('jail', playerId, `${player.name} paid $${fine} fine after 3 failed attempts`);
+        return { freed: true, dice: diceResult };
+      } else {
+        const updated = { ...player, jailTurns: newJailTurns };
+        set((s) => ({
+          gameState: s.gameState ? {
+            ...s.gameState,
+            dice: diceResult,
+            players: { ...s.gameState.players, [playerId]: updated },
+          } : s.gameState,
+        }));
+        return { freed: false, dice: diceResult };
+      }
+    }
+  },
+
   // Getters
   getCurrentPlayer: () => {
     const state = get();
-    if (!state.gameState) return null;
-    const playerIds = Object.keys(state.gameState.players);
-    const currentPlayerId = playerIds[state.gameState.currentPlayerIndex];
-    return state.gameState.players[currentPlayerId] || null;
+    if (!state.gameState || !state.gameState.playerOrder) return null;
+    const currentPlayerId = state.gameState.playerOrder[state.gameState.currentPlayerIndex];
+    return currentPlayerId ? state.gameState.players[currentPlayerId] || null : null;
   },
 
   getPlayerAtPosition: (position) => {
