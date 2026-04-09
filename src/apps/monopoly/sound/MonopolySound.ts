@@ -391,7 +391,7 @@ export class MonopolySoundEngine {
       
       const baseFreqs = [55, 82.5, 110]; // Low ambient notes
       
-      baseFreqs.forEach((freq, i) => {
+      baseFreqs.forEach((freq) => {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         const filter = ctx.createBiquadFilter();

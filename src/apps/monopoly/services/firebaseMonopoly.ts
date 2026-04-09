@@ -22,7 +22,6 @@ import type {
   Room,
   GameState,
   Player,
-  Property,
   RoomSettings,
 } from '../types';
 

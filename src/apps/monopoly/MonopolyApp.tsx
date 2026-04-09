@@ -15,7 +15,6 @@ import { Gamepad2, Settings, HelpCircle, X } from 'lucide-react';
 import LobbyScreen from './components/screens/LobbyScreen';
 import GameScreen from './components/screens/GameScreen';
 import { useMonopolyGame } from './hooks/useMonopolyGame';
-import { useMonopolyStore } from './store/gameStore';
 import { monopolySoundEngine } from './sound/MonopolySound';
 
 // ============================================================================

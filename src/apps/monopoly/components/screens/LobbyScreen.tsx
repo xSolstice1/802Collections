@@ -18,9 +18,7 @@ interface LobbyScreenProps {
 const LobbyScreen: React.FC<LobbyScreenProps> = ({ onGameStart }) => {
   const {
     room,
-    currentUserId,
     gameState,
-    playerCount,
     isHost,
     canStartGame,
     createRoom,

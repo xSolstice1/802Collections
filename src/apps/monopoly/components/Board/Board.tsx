@@ -139,7 +139,11 @@ const Board: React.FC<BoardProps> = ({
               );
             }
 
-            const playersHere = playersAtPosition[boardSpace.position] || [];
+            const playersHere = (playersAtPosition[boardSpace.position] || []).map(p => ({
+              id: p.playerId,
+              color: p.color,
+              name: p.name,
+            }));
             const isSelected = selectedSpace === boardSpace.position;
 
             return (
