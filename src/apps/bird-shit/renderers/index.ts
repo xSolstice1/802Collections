@@ -4,6 +4,8 @@ export { drawBirdCrowned } from './drawBirdCrowned';
 export { drawBirdOwl } from './drawBirdOwl';
 export { drawBirdToucan } from './drawBirdToucan';
 export { drawBirdEagle } from './drawBirdEagle';
+export { drawObstacle } from './drawObstacle';
+export { drawBalloon } from './drawBalloon';
 export { drawPedestrian } from './drawPedestrian';
 export { drawHunter } from './drawHunter';
 export { drawBullet } from './drawBullet';
