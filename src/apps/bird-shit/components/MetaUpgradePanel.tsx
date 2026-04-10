@@ -13,7 +13,7 @@ export const MetaUpgradePanel = ({ meta, onUpdate }: Props) => {
   };
 
   return (
-    <div className="card p-4">
+    <div>
       <div className="flex items-center gap-2 mb-3">
         <span className="text-lg">🧬</span>
         <span className="text-white font-medium text-sm">Permanent Upgrades</span>
