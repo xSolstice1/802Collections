@@ -15,7 +15,7 @@ import { BULLET_W, BULLET_H } from '../constants';
 export const sniperHunter: BossDefinition = {
   id: 'sniper',
   name: 'Hawk-Eye Harris',
-  maxHp: (level) => 60 + level * 12,
+  maxHp: (level) => 20 + level * 3,
   w: 40,
   h: 50,
 

@@ -6,6 +6,7 @@ export interface Upgrades {
   splitPoop: number;
   homingPoop: number;
   // Card-system additions
+  damage: number;          // bonus damage per poop hit (base = 1)
   coinBonus: number;       // extra coins per hit
   toxicPoop: number;       // toxic puddle stacks
   scatterBomb: number;     // AoE explosion on impact
@@ -62,6 +63,28 @@ export interface Balloon extends Entity {
   colorIndex: number; // index into BALLOON_COLORS
 }
 
+export interface ToxicPuddle {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  life: number;     // seconds remaining
+  damage: number;   // damage per tick
+  tickTimer: number; // seconds until next damage tick
+}
+
+export interface GroundTrail {
+  x: number;
+  y: number;
+  life: number;     // seconds remaining
+}
+
+export interface LightningArc {
+  x1: number; y1: number;
+  x2: number; y2: number;
+  life: number;     // seconds remaining (visual only)
+}
+
 export type GameState = 'idle' | 'playing' | 'upgrading' | 'over' | 'boss' | 'relic_select';
 
 export interface GameData {
@@ -113,6 +136,10 @@ export interface GameData {
   // Run mode
   runMode: 'classic' | 'daily' | 'seeded';
   seed: number;
+  // Effect entities
+  toxicPuddles: ToxicPuddle[];
+  groundTrails: GroundTrail[];
+  lightningArcs: LightningArc[];
   // Special mechanics
   shieldTimer: number;    // seconds until feather shield recharges
   shieldActive: boolean;  // whether shield can block next hit

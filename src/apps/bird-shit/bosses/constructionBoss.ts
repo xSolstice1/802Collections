@@ -15,7 +15,7 @@ import { BULLET_W, BULLET_H } from '../constants';
 export const constructionBoss: BossDefinition = {
   id: 'construction',
   name: 'Foreman Frank',
-  maxHp: (level) => 80 + level * 15,
+  maxHp: (level) => 15 + level * 3,
   w: 60,
   h: 80,
 

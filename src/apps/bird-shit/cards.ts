@@ -60,6 +60,11 @@ export const CARD_POOL: UpgradeCard[] = [
     rarity: 'common', icon: '🪙', maxStacks: 3,
     apply: (g) => { g.upgrades.coinBonus = (g.upgrades.coinBonus ?? 0) + 1; },
   },
+  {
+    id: 'sharp_droppings', name: 'Sharp Droppings', description: '+1 poop damage',
+    rarity: 'common', icon: '💎', maxStacks: 4,
+    apply: (g) => { g.upgrades.damage++; },
+  },
 
   // ── Rare ──
   {
@@ -71,6 +76,11 @@ export const CARD_POOL: UpgradeCard[] = [
     id: 'homing_droppings', name: 'Homing Droppings', description: 'Poop tracks nearest target',
     rarity: 'rare', icon: '🎯', maxStacks: 2,
     apply: (g) => { g.upgrades.homingPoop++; },
+  },
+  {
+    id: 'heavy_payload', name: 'Heavy Payload', description: '+3 poop damage',
+    rarity: 'rare', icon: '🔨', maxStacks: 2,
+    apply: (g) => { g.upgrades.damage += 3; },
   },
   {
     id: 'toxic_poop', name: 'Toxic Poop', description: 'Poop leaves damaging puddle',

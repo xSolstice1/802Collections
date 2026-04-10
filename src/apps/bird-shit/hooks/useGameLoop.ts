@@ -9,7 +9,7 @@ import {
   OBSTACLE_W, getLevelThreshold, collides, getObstacleSpawnInterval, getObstacleMaxHeight, OBSTACLE_MIN_H,
   BALLOON_W, BALLOON_H, getBalloonSpawnInterval,
 } from '../constants';
-import { DEFAULT_UPGRADES, getPoopSpeed, getPoopW, getPoopH, getBirdSpeed, getHomingStrength } from '../upgrades';
+import { DEFAULT_UPGRADES, getPoopSpeed, getPoopW, getPoopH, getBirdSpeed, getHomingStrength, getPoopDamage } from '../upgrades';
 import { rollCards } from '../cards';
 import { getBossForLevel } from '../bosses';
 import { rollRelics } from '../relics';
@@ -100,6 +100,9 @@ export function useGameLoop({
     comboTimer: 0,
     runMode: 'classic',
     seed: 0,
+    toxicPuddles: [],
+    groundTrails: [],
+    lightningArcs: [],
     shieldTimer: 0,
     shieldActive: false,
   });
@@ -367,6 +370,106 @@ export function useGameLoop({
 
     const homingStr = getHomingStrength(g.upgrades);
 
+    // Helper: spawn toxic puddle at position
+    const spawnPuddle = (px: number, _py: number) => {
+      if (g.upgrades.toxicPoop <= 0) return;
+      g.toxicPuddles.push({
+        x: px - 12, y: GROUND_Y - 4,
+        w: 24 + g.upgrades.toxicPoop * 8,
+        h: 4,
+        life: 3 + g.upgrades.toxicPoop,
+        damage: 1,
+        tickTimer: 0.5,
+      });
+    };
+
+    // Helper: scatter bomb AoE at position
+    const scatterAoE = (px: number, py: number) => {
+      if (!g.upgrades.scatterBomb) return;
+      const radius = 60;
+      for (const ped of g.pedestrians) {
+        if (ped.hit) continue;
+        const dx = (ped.x + ped.w / 2) - px;
+        const dy = (ped.y + ped.h / 2) - py;
+        if (dx * dx + dy * dy < radius * radius) {
+          ped.hit = true;
+          g.score += 10;
+          g.coins += 1;
+          setScore(g.score);
+          setCoins(g.coins);
+        }
+      }
+      for (let i = g.hunters.length - 1; i >= 0; i--) {
+        const h = g.hunters[i];
+        const dx = (h.x + h.w / 2) - px;
+        const dy = (h.y + h.h / 2) - py;
+        if (dx * dx + dy * dy < radius * radius) {
+          g.hunters.splice(i, 1);
+          g.score += 25;
+          g.coins += 3;
+          setScore(g.score);
+          setCoins(g.coins);
+        }
+      }
+    };
+
+    // Helper: chain lightning from hit position
+    const chainLightning = (px: number, py: number) => {
+      if (!g.upgrades.stormGut) return;
+      const range = 100;
+      const maxChains = 3;
+      let chains = 0;
+      let cx = px, cy = py;
+      const hitSet = new Set<number>();
+
+      for (let c = 0; c < maxChains; c++) {
+        let bestDist = Infinity;
+        let bestIdx = -1;
+        let bestX = 0, bestY = 0;
+        let bestIsPed = true;
+
+        // Check pedestrians
+        for (let i = 0; i < g.pedestrians.length; i++) {
+          if (g.pedestrians[i].hit || hitSet.has(i)) continue;
+          const tx = g.pedestrians[i].x + g.pedestrians[i].w / 2;
+          const ty = g.pedestrians[i].y + g.pedestrians[i].h / 2;
+          const d = Math.sqrt((tx - cx) ** 2 + (ty - cy) ** 2);
+          if (d < range && d < bestDist) {
+            bestDist = d; bestIdx = i; bestX = tx; bestY = ty; bestIsPed = true;
+          }
+        }
+        // Check hunters
+        for (let i = 0; i < g.hunters.length; i++) {
+          const tx = g.hunters[i].x + g.hunters[i].w / 2;
+          const ty = g.hunters[i].y + g.hunters[i].h / 2;
+          const d = Math.sqrt((tx - cx) ** 2 + (ty - cy) ** 2);
+          if (d < range && d < bestDist) {
+            bestDist = d; bestIdx = i + 10000; bestX = tx; bestY = ty; bestIsPed = false;
+          }
+        }
+
+        if (bestIdx < 0) break;
+        // Visual arc
+        g.lightningArcs.push({ x1: cx, y1: cy, x2: bestX, y2: bestY, life: 0.3 });
+        // Damage
+        if (bestIsPed) {
+          g.pedestrians[bestIdx].hit = true;
+          g.score += 10;
+          g.coins += 1;
+        } else {
+          const hi = bestIdx - 10000;
+          g.hunters.splice(hi, 1);
+          g.score += 25;
+          g.coins += 3;
+        }
+        setScore(g.score);
+        setCoins(g.coins);
+        hitSet.add(bestIdx);
+        cx = bestX; cy = bestY;
+        chains++;
+      }
+    };
+
     // Update poops
     g.poops = g.poops.filter((p) => {
       p.vy += POOP_GRAVITY * dt;
@@ -401,6 +504,7 @@ export function useGameLoop({
       if (p.x > CANVAS_W - p.w) p.x = CANVAS_W - p.w;
 
       // Boss collision
+      const dmg = getPoopDamage(g.upgrades);
       if (g.boss && g.bossDefinition && !g.boss.defeated) {
         const boss = g.boss;
         const def = g.bossDefinition;
@@ -428,10 +532,10 @@ export function useGameLoop({
         // Standard boss hitbox
         const hitbox = def.getHitbox(boss);
         if (hitbox && collides(p, hitbox)) {
-          boss.hp--;
+          boss.hp = Math.max(0, boss.hp - dmg);
           boss.data.hitFlash = 0.15;
-          g.score += 5;
-          g.coins += 1;
+          g.score += 5 * dmg;
+          g.coins += dmg;
           setScore(g.score);
           setCoins(g.coins);
           birdShitSound.play('boss_hit');
@@ -452,11 +556,17 @@ export function useGameLoop({
           setScore(g.score);
           setCoins(g.coins);
           birdShitSound.play('poop_hit_ped');
+          const hitX = p.x + p.w / 2, hitY = p.y + p.h / 2;
+          scatterAoE(hitX, hitY);
+          chainLightning(hitX, hitY);
+          spawnPuddle(hitX, hitY);
           return false;
         }
       }
       for (let i = g.hunters.length - 1; i >= 0; i--) {
         if (collides(p, g.hunters[i])) {
+          const hitX = g.hunters[i].x + g.hunters[i].w / 2;
+          const hitY = g.hunters[i].y + g.hunters[i].h / 2;
           g.hunters.splice(i, 1);
           g.combo++;
           g.comboTimer = 2;
@@ -465,6 +575,9 @@ export function useGameLoop({
           setScore(g.score);
           setCoins(g.coins);
           birdShitSound.play('poop_hit_hunter');
+          scatterAoE(hitX, hitY);
+          chainLightning(hitX, hitY);
+          spawnPuddle(hitX, hitY);
           return false;
         }
       }
@@ -484,7 +597,16 @@ export function useGameLoop({
           return false;
         }
       }
-      return p.y < GROUND_Y;
+      // Golden gut: drop trail particles while falling
+      if (g.upgrades.goldenGut && Math.random() < dt * 10) {
+        g.groundTrails.push({ x: p.x + p.w / 2, y: p.y + p.h, life: 2.0 });
+      }
+      // Poop hits ground — spawn toxic puddle
+      if (p.y >= GROUND_Y) {
+        spawnPuddle(p.x + p.w / 2, GROUND_Y);
+        return false;
+      }
+      return true;
     });
 
     // Update pedestrians
@@ -620,6 +742,89 @@ export function useGameLoop({
     g.bullets.forEach((b) => drawBullet(ctx, b));
     g.poops.forEach((p) => drawPoop(ctx, p));
     selectedSkinRef.current(ctx, g.birdX, g.birdY, g.wingUp, g.hitFlash > 0 && Math.floor(g.hitFlash * 60) % 4 < 2);
+
+    // ── Update + render effects ──
+
+    // Toxic puddles: damage enemies, decay
+    g.toxicPuddles = g.toxicPuddles.filter((puddle) => {
+      puddle.life -= dt;
+      puddle.tickTimer -= dt;
+      if (puddle.tickTimer <= 0) {
+        puddle.tickTimer = 0.5;
+        // Damage pedestrians/hunters standing in puddle
+        for (const ped of g.pedestrians) {
+          if (!ped.hit && ped.x < puddle.x + puddle.w && ped.x + PED_W > puddle.x && ped.y + PED_H > puddle.y) {
+            ped.hit = true;
+            g.score += 10;
+            g.coins += 1;
+            setScore(g.score);
+            setCoins(g.coins);
+          }
+        }
+        for (let i = g.hunters.length - 1; i >= 0; i--) {
+          const h = g.hunters[i];
+          if (h.x < puddle.x + puddle.w && h.x + HUNTER_W > puddle.x && h.y + HUNTER_H > puddle.y) {
+            g.hunters.splice(i, 1);
+            g.score += 25;
+            g.coins += 3;
+            setScore(g.score);
+            setCoins(g.coins);
+          }
+        }
+      }
+      // Draw puddle
+      const alpha = Math.min(1, puddle.life * 0.5);
+      ctx.fillStyle = `rgba(34, 197, 94, ${alpha * 0.5})`;
+      ctx.fillRect(puddle.x, puddle.y, puddle.w, puddle.h);
+      ctx.fillStyle = `rgba(34, 197, 94, ${alpha * 0.3})`;
+      ctx.fillRect(puddle.x - 2, puddle.y + puddle.h, puddle.w + 4, 2);
+      return puddle.life > 0;
+    });
+
+    // Ground trails (golden gut): damage on contact, decay
+    g.groundTrails = g.groundTrails.filter((trail) => {
+      trail.life -= dt;
+      // Damage enemies touching trail
+      for (const ped of g.pedestrians) {
+        if (!ped.hit && Math.abs(ped.x + PED_W / 2 - trail.x) < 10 && Math.abs(ped.y + PED_H - trail.y) < 15) {
+          ped.hit = true;
+          g.score += 10;
+          g.coins += 1;
+          setScore(g.score);
+          setCoins(g.coins);
+        }
+      }
+      // Draw trail particle
+      const alpha = Math.min(1, trail.life * 0.7);
+      ctx.fillStyle = `rgba(251, 191, 36, ${alpha * 0.6})`;
+      ctx.beginPath();
+      ctx.arc(trail.x, trail.y, 3, 0, Math.PI * 2);
+      ctx.fill();
+      return trail.life > 0;
+    });
+
+    // Lightning arcs: visual only, decay
+    g.lightningArcs = g.lightningArcs.filter((arc) => {
+      arc.life -= dt;
+      const alpha = Math.min(1, arc.life * 4);
+      ctx.strokeStyle = `rgba(96, 165, 250, ${alpha})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      // Jagged lightning path
+      const dx = arc.x2 - arc.x1;
+      const dy = arc.y2 - arc.y1;
+      const segs = 5;
+      ctx.moveTo(arc.x1, arc.y1);
+      for (let s = 1; s < segs; s++) {
+        const t = s / segs;
+        const jx = (Math.random() - 0.5) * 12;
+        const jy = (Math.random() - 0.5) * 12;
+        ctx.lineTo(arc.x1 + dx * t + jx, arc.y1 + dy * t + jy);
+      }
+      ctx.lineTo(arc.x2, arc.y2);
+      ctx.stroke();
+      return arc.life > 0;
+    });
 
     // Draw boss
     if (g.boss && g.bossDefinition) {
@@ -867,6 +1072,9 @@ export function useGameLoop({
     g.comboTimer = 0;
     g.runMode = 'classic';
     g.seed = randomSeed();
+    g.toxicPuddles = [];
+    g.groundTrails = [];
+    g.lightningArcs = [];
     g.shieldTimer = 0;
     g.shieldActive = false;
     setDifficulty(g, 1);

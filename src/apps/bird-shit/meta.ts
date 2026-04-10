@@ -30,6 +30,13 @@ export const META_UPGRADES: MetaUpgrade[] = [
     maxLevel: 3,
     costs: [40, 80, 160],
   },
+  {
+    id: 'meta_damage',
+    name: 'Corrosive Diet',
+    description: '+1 starting poop damage',
+    maxLevel: 2,
+    costs: [60, 120],
+  },
 ];
 
 export interface MetaState {
@@ -73,10 +80,12 @@ export function getMetaBonuses(state: MetaState) {
   const speedLevel = state.upgrades['meta_speed'] ?? 0;
   const hpLevel = state.upgrades['meta_hp'] ?? 0;
   const coinsLevel = state.upgrades['meta_coins'] ?? 0;
+  const damageLevel = state.upgrades['meta_damage'] ?? 0;
 
   return {
     speedMultiplier: 1 + speedLevel * 0.05,
     extraLives: hpLevel,
     coinMultiplier: 1 + coinsLevel * 0.1,
+    extraDamage: damageLevel,
   };
 }

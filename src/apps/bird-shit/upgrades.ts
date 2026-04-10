@@ -8,6 +8,7 @@ export const DEFAULT_UPGRADES: Upgrades = {
   extraLife: 0,
   splitPoop: 0,
   homingPoop: 0,
+  damage: 0,
   coinBonus: 0,
   toxicPoop: 0,
   scatterBomb: 0,
@@ -32,3 +33,4 @@ export const getPoopH = (upgrades: Upgrades) => BASE_POOP_H + upgrades.poopSize 
 export const getBirdSpeed = (upgrades: Upgrades) => BASE_BIRD_SPEED + upgrades.birdSpeed * 36;
 export const getHomingStrength = (upgrades: Upgrades) =>
   upgrades.homingPoop === 0 ? 0 : upgrades.homingPoop === 1 ? 24 : 54;
+export const getPoopDamage = (upgrades: Upgrades) => 1 + upgrades.damage;
