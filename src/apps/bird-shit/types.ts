@@ -5,6 +5,13 @@ export interface Upgrades {
   extraLife: number;
   splitPoop: number;
   homingPoop: number;
+  // Card-system additions
+  coinBonus: number;       // extra coins per hit
+  toxicPoop: number;       // toxic puddle stacks
+  scatterBomb: number;     // AoE explosion on impact
+  featherShield: number;   // block 1 hit every 15s
+  goldenGut: number;       // damaging ground trails
+  stormGut: number;        // chain lightning on hit
 }
 
 export interface UpgradeDef {
@@ -55,7 +62,7 @@ export interface Balloon extends Entity {
   colorIndex: number; // index into BALLOON_COLORS
 }
 
-export type GameState = 'idle' | 'playing' | 'upgrading' | 'over';
+export type GameState = 'idle' | 'playing' | 'upgrading' | 'over' | 'boss' | 'relic_select';
 
 export interface GameData {
   running: boolean;
@@ -72,14 +79,41 @@ export interface GameData {
   obstacles: Obstacle[];
   balloons: Balloon[];
   frame: number;
+  time: number;           // elapsed game time in seconds (for animations)
   wingUp: boolean;
-  hitFlash: number;
-  poopCooldown: number;
-  countdownTimer: number;
+  hitFlash: number;       // seconds remaining
+  poopCooldown: number;   // seconds remaining
+  countdownTimer: number; // seconds remaining
   upgrades: Upgrades;
-  scrollSpeed: number;
-  spawnIntervalPed: number;
+  // Difficulty params (per-second units)
+  scrollSpeed: number;       // px/s
+  spawnIntervalPed: number;  // seconds between spawns
   spawnIntervalHunter: number;
   hunterShootInterval: number;
-  bulletSpeed: number;
+  bulletSpeed: number;       // px/s
+  // Spawn accumulators (accumulate dt, spawn when >= interval)
+  spawnTimerPed: number;
+  spawnTimerHunter: number;
+  spawnTimerObstacle: number;
+  spawnTimerBalloon: number;
+  // Card upgrade system
+  pickedCards: Map<string, number>;
+  offeredCards: import('./cards').UpgradeCard[];
+  // Boss system
+  boss: import('./bosses/types').BossState | null;
+  bossDefinition: import('./bosses/types').BossDefinition | null;
+  // Biome
+  biome: import('./biomes').Biome;
+  // Relic system
+  relics: string[];                            // held relic IDs
+  offeredRelics: import('./relics').Relic[];    // relics to choose from after boss
+  // Combo system
+  combo: number;
+  comboTimer: number; // seconds until combo resets
+  // Run mode
+  runMode: 'classic' | 'daily' | 'seeded';
+  seed: number;
+  // Special mechanics
+  shieldTimer: number;    // seconds until feather shield recharges
+  shieldActive: boolean;  // whether shield can block next hit
 }

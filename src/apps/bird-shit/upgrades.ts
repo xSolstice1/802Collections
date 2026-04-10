@@ -8,6 +8,12 @@ export const DEFAULT_UPGRADES: Upgrades = {
   extraLife: 0,
   splitPoop: 0,
   homingPoop: 0,
+  coinBonus: 0,
+  toxicPoop: 0,
+  scatterBomb: 0,
+  featherShield: 0,
+  goldenGut: 0,
+  stormGut: 0,
 };
 
 export const UPGRADE_DEFS: UpgradeDef[] = [
@@ -19,9 +25,10 @@ export const UPGRADE_DEFS: UpgradeDef[] = [
   { key: 'homingPoop', name: 'Homing Poop', desc: ['Weak tracking', 'Strong tracking'], maxLevel: 2, costs: [18, 32] },
 ];
 
-export const getPoopSpeed = (upgrades: Upgrades) => BASE_POOP_SPEED + upgrades.poopSpeed * 1.0;
+// All speed values in px/s
+export const getPoopSpeed = (upgrades: Upgrades) => BASE_POOP_SPEED + upgrades.poopSpeed * 60;
 export const getPoopW = (upgrades: Upgrades) => BASE_POOP_W + upgrades.poopSize * 3;
 export const getPoopH = (upgrades: Upgrades) => BASE_POOP_H + upgrades.poopSize * 2;
-export const getBirdSpeed = (upgrades: Upgrades) => BASE_BIRD_SPEED + upgrades.birdSpeed * 0.6;
+export const getBirdSpeed = (upgrades: Upgrades) => BASE_BIRD_SPEED + upgrades.birdSpeed * 36;
 export const getHomingStrength = (upgrades: Upgrades) =>
-  upgrades.homingPoop === 0 ? 0 : upgrades.homingPoop === 1 ? 0.4 : 0.9;
+  upgrades.homingPoop === 0 ? 0 : upgrades.homingPoop === 1 ? 24 : 54;

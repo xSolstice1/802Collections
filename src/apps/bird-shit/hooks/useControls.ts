@@ -107,18 +107,49 @@ export function useControls({
     }
   }, [keysRef]);
 
+  const [pseudoFullscreen, setPseudoFullscreen] = useState(false);
+
+  const isIOS = useRef(
+    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  );
+
   const toggleFullscreen = useCallback(async () => {
+    // iOS doesn't support the Fullscreen API — use pseudo-fullscreen
+    if (isIOS.current) {
+      setPseudoFullscreen((prev) => {
+        const next = !prev;
+        if (next) {
+          document.body.style.overflow = 'hidden';
+          window.scrollTo(0, 0);
+        } else {
+          document.body.style.overflow = '';
+        }
+        setIsFullscreen(next);
+        return next;
+      });
+      return;
+    }
     try {
+      const webkitEl = containerRef.current as HTMLElement & { webkitRequestFullscreen?: () => Promise<void> };
       if (document.fullscreenElement) {
         await document.exitFullscreen();
+      } else if (webkitEl?.webkitRequestFullscreen) {
+        await webkitEl.webkitRequestFullscreen();
       } else {
         const el = containerRef.current ?? document.documentElement;
         await el.requestFullscreen();
       }
     } catch {
-      // fullscreen may not be available
+      // fullscreen may not be available — fall back to pseudo-fullscreen
+      setPseudoFullscreen((prev) => {
+        const next = !prev;
+        document.body.style.overflow = next ? 'hidden' : '';
+        setIsFullscreen(next);
+        return next;
+      });
     }
-  }, [containerRef]);
+  }, [containerRef, setIsFullscreen]);
 
   // Keyboard events
   useEffect(() => {
@@ -127,11 +158,7 @@ export function useControls({
         e.preventDefault();
       }
       const state = gameStateRef.current;
-      if (state === 'upgrading') {
-        const num = parseInt(e.key, 10);
-        if (num >= 1 && num <= 6) buyUpgradeRef.current(num - 1);
-        return;
-      }
+      if (state === 'upgrading') return; // handled by CardSelectionOverlay
       if (state !== 'playing') {
         if (e.code === 'Space' || e.code === 'Enter') startGameRef.current();
         return;
@@ -226,6 +253,7 @@ export function useControls({
     portraitDismissed,
     setPortraitDismissed,
     toggleFullscreen,
+    pseudoFullscreen,
     JOYSTICK_SIZE,
     THUMB_SIZE,
   };

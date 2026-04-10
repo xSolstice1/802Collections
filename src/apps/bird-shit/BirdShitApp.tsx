@@ -1,6 +1,12 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Bird, Play, Maximize, Minimize, Trophy, X, Lock } from 'lucide-react';
+import { Bird, Play, Maximize, Minimize, Trophy, X, Lock, Volume2, VolumeX } from 'lucide-react';
+import { birdShitSound } from './sound';
 import { GameLeaderboard } from '@components/leaderboard';
+import { CardSelectionOverlay } from './components/CardSelectionOverlay';
+import { RelicSelectionOverlay } from './components/RelicSelectionOverlay';
+import { MetaUpgradePanel } from './components/MetaUpgradePanel';
+import { loadMeta, saveMeta, earnMetaCurrency } from './meta';
+import type { MetaState } from './meta';
 import { CANVAS_W, CANVAS_H, GROUND_Y, BIRD_W, STORAGE_KEY } from './constants';
 import { useGameLoop } from './hooks/useGameLoop';
 import { useControls } from './hooks/useControls';
@@ -69,9 +75,13 @@ const BirdShitApp = () => {
   const playerNameRef = useRef(playerName);
   playerNameRef.current = playerName;
   const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const [meta, setMeta] = useState<MetaState>(() => loadMeta());
+  const [soundMuted, setSoundMuted] = useState(false);
+  const [sfxVol, setSfxVol] = useState(0.3);
+  const [bgmVol, setBgmVol] = useState(0.15);
 
   // Game loop hook
-  const { redrawUpgradeScreen, startGame, dropPoop, buyUpgrade, continueFromUpgrade } =
+  const { gameRef, redrawUpgradeScreen, startGame, dropPoop, selectCard, selectRelic, continueFromUpgrade, startWithMode } =
     useGameLoop({
       canvasRef,
       keysRef,
@@ -102,6 +112,7 @@ const BirdShitApp = () => {
     portraitDismissed,
     setPortraitDismissed,
     toggleFullscreen,
+    pseudoFullscreen,
     JOYSTICK_SIZE,
     THUMB_SIZE,
   } = useControls({
@@ -114,54 +125,18 @@ const BirdShitApp = () => {
     setIsFullscreen,
   });
 
-  // Convert client coords to canvas coords (accounting for object-fit: contain)
-  const clientToCanvas = useCallback((clientX: number, clientY: number): { x: number; y: number } | null => {
-    const canvas = canvasRef.current;
-    if (!canvas) return null;
-    const rect = canvas.getBoundingClientRect();
-    const elemAspect = rect.width / rect.height;
-    const canvasAspect = CANVAS_W / CANVAS_H;
-    let renderW: number, renderH: number, offsetX: number, offsetY: number;
-    if (elemAspect > canvasAspect) {
-      renderH = rect.height;
-      renderW = rect.height * canvasAspect;
-      offsetX = (rect.width - renderW) / 2;
-      offsetY = 0;
-    } else {
-      renderW = rect.width;
-      renderH = rect.width / canvasAspect;
-      offsetX = 0;
-      offsetY = (rect.height - renderH) / 2;
-    }
-    const localX = clientX - rect.left - offsetX;
-    const localY = clientY - rect.top - offsetY;
-    if (localX < 0 || localX > renderW || localY < 0 || localY > renderH) return null;
-    return { x: (localX / renderW) * CANVAS_W, y: (localY / renderH) * CANVAS_H };
-  }, []);
+  // Handle card selection from overlay
+  const handleCardSelect = useCallback((index: number) => {
+    selectCard(index);
+    continueFromUpgrade();
+  }, [selectCard, continueFromUpgrade]);
 
-  // Handle canvas click / touch for upgrade screen + other states
-  const handleCanvasInteraction = useCallback((clientX: number, clientY: number) => {
-    if (gameState === 'upgrading') {
-      const pos = clientToCanvas(clientX, clientY);
-      if (!pos) return;
-      const startX = 50, startY = 100, colW = 360, rowH = 80;
-      for (let i = 0; i < 6; i++) {
-        const col = i % 2;
-        const row = Math.floor(i / 2);
-        const x = startX + col * colW;
-        const y = startY + row * rowH;
-        const boxW = colW - 20;
-        const boxH = rowH - 12;
-        if (pos.x >= x && pos.x <= x + boxW && pos.y >= y && pos.y <= y + boxH) {
-          buyUpgrade(i);
-          return;
-        }
-      }
-      return;
-    }
+  // Handle canvas click / touch for game states
+  const handleCanvasInteraction = useCallback((_clientX: number, _clientY: number) => {
+    if (gameState === 'upgrading' || gameState === 'relic_select') return; // handled by overlays
     if (gameState === 'playing') dropPoop();
     else startGame();
-  }, [gameState, dropPoop, startGame, buyUpgrade, clientToCanvas]);
+  }, [gameState, dropPoop, startGame]);
 
   const handleCanvasClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     handleCanvasInteraction(e.clientX, e.clientY);
@@ -173,6 +148,17 @@ const BirdShitApp = () => {
     const touch = e.changedTouches[0];
     handleCanvasInteraction(touch.clientX, touch.clientY);
   }, [gameState, handleCanvasInteraction]);
+
+  // Earn meta currency on game over
+  useEffect(() => {
+    if (gameState === 'over' && score > 0) {
+      setMeta((prev) => {
+        const updated = earnMetaCurrency(score, prev);
+        saveMeta(updated);
+        return updated;
+      });
+    }
+  }, [gameState, score]);
 
   // Draw idle / game-over / upgrading screens (not the active game loop)
   useEffect(() => {
@@ -279,7 +265,10 @@ const BirdShitApp = () => {
       )}
 
       {/* Game area */}
-      <div className={mobilePlay ? 'relative w-full h-full' : 'card p-4 flex flex-col items-center'}>
+      <div
+        className={mobilePlay ? 'relative w-full h-full' : 'card p-4 flex flex-col items-center'}
+        style={pseudoFullscreen ? { position: 'fixed', inset: 0, zIndex: 9999, background: '#000' } : undefined}
+      >
         <canvas
           ref={canvasRef}
           width={CANVAS_W}
@@ -294,17 +283,28 @@ const BirdShitApp = () => {
           onContextMenu={(e) => e.preventDefault()}
         />
 
-        {/* Fullscreen toggle */}
+        {/* Fullscreen + mute toggles */}
         {mobilePlay && (
-          <button
-            onClick={toggleFullscreen}
-            className="absolute top-2 right-2 z-10 p-2 rounded-lg active:scale-90"
-            style={{ background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.15)', touchAction: 'none' }}
-          >
-            {isFullscreen
-              ? <Minimize className="w-5 h-5 text-white/70" />
-              : <Maximize className="w-5 h-5 text-white/70" />}
-          </button>
+          <div className="absolute top-2 right-2 z-10 flex gap-2">
+            <button
+              onClick={() => { const m = !soundMuted; setSoundMuted(m); birdShitSound.setMuted(m); }}
+              className="p-2 rounded-lg active:scale-90"
+              style={{ background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.15)', touchAction: 'none' }}
+            >
+              {soundMuted
+                ? <VolumeX className="w-5 h-5 text-white/70" />
+                : <Volume2 className="w-5 h-5 text-white/70" />}
+            </button>
+            <button
+              onClick={toggleFullscreen}
+              className="p-2 rounded-lg active:scale-90"
+              style={{ background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.15)', touchAction: 'none' }}
+            >
+              {isFullscreen
+                ? <Minimize className="w-5 h-5 text-white/70" />
+                : <Maximize className="w-5 h-5 text-white/70" />}
+            </button>
+          </div>
         )}
 
         {/* Mobile overlay controls */}
@@ -380,17 +380,29 @@ const BirdShitApp = () => {
           </>
         )}
 
+        {/* Relic selection overlay (after boss defeat) */}
+        {gameState === 'relic_select' && (
+          <RelicSelectionOverlay
+            relics={gameRef.current.offeredRelics}
+            onSelect={selectRelic}
+          />
+        )}
+
+        {/* Card selection overlay */}
+        {gameState === 'upgrading' && (
+          <CardSelectionOverlay
+            cards={gameRef.current.offeredCards}
+            level={level}
+            onSelect={handleCardSelect}
+          />
+        )}
+
         {/* Mobile overlay buttons for non-playing states */}
-        {mobilePlay && gameState !== 'playing' && (
+        {mobilePlay && gameState !== 'playing' && gameState !== 'upgrading' && (
           <div className="absolute inset-0 flex items-end justify-center pb-8 pointer-events-none">
             {gameState === 'over' && (
               <button onClick={startGame} className="btn-primary flex items-center gap-2 px-6 py-3 text-lg pointer-events-auto">
                 <Play className="w-5 h-5" /> Play Again
-              </button>
-            )}
-            {gameState === 'upgrading' && (
-              <button onClick={continueFromUpgrade} className="btn-primary flex items-center gap-2 px-6 py-3 text-lg pointer-events-auto">
-                <Play className="w-5 h-5" /> Continue to Level {level}
               </button>
             )}
           </div>
@@ -400,20 +412,24 @@ const BirdShitApp = () => {
         {!mobilePlay && (
           <div className="flex items-center gap-4 mt-4">
             {gameState === 'idle' && (
-              <button onClick={startGame} className="btn-primary flex items-center gap-2 px-6 py-2">
-                <Play className="w-4 h-4" /> Start Game
-              </button>
+              <>
+                <button onClick={startGame} className="btn-primary flex items-center gap-2 px-6 py-2">
+                  <Play className="w-4 h-4" /> Start Game
+                </button>
+                <button
+                  onClick={() => startWithMode('daily')}
+                  className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded transition-colors"
+                >
+                  📅 Daily Challenge
+                </button>
+              </>
             )}
             {gameState === 'over' && (
               <button onClick={startGame} className="btn-primary flex items-center gap-2 px-6 py-2">
                 <Play className="w-4 h-4" /> Play Again
               </button>
             )}
-            {gameState === 'upgrading' && (
-              <button onClick={continueFromUpgrade} className="btn-primary flex items-center gap-2 px-6 py-2">
-                <Play className="w-4 h-4" /> Continue to Level {level}
-              </button>
-            )}
+            {/* Card selection handled by overlay */}
             {gameState === 'playing' && (
               <div className="flex items-center gap-6">
                 <p className="text-sm text-gray-500 font-mono">Score: <span className="text-802 font-bold">{score}</span></p>
@@ -494,6 +510,14 @@ const BirdShitApp = () => {
         </div>
       )}
 
+      {/* Meta upgrades — only shown before game starts */}
+      {gameState === 'idle' && (
+        <MetaUpgradePanel
+          meta={meta}
+          onUpdate={(newMeta) => { setMeta(newMeta); saveMeta(newMeta); }}
+        />
+      )}
+
       {/* Bird Skin selector — only shown before game starts */}
       {gameState === 'idle' && (
         <div className="card p-4">
@@ -541,6 +565,39 @@ const BirdShitApp = () => {
                 </button>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {/* Sound Settings */}
+      {!mobilePlay && (
+        <div className="card p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <button
+              onClick={() => { const m = !soundMuted; setSoundMuted(m); birdShitSound.setMuted(m); }}
+              className="p-1.5 rounded hover:bg-gray-800 transition-colors"
+            >
+              {soundMuted ? <VolumeX className="w-4 h-4 text-gray-400" /> : <Volume2 className="w-4 h-4 text-802" />}
+            </button>
+            <span className="text-white font-medium text-sm">Sound</span>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <label className="flex items-center gap-2 text-sm text-gray-400">
+              SFX
+              <input
+                type="range" min="0" max="100" value={Math.round(sfxVol * 100)}
+                onChange={(e) => { const v = Number(e.target.value) / 100; setSfxVol(v); birdShitSound.setSFXVolume(v); }}
+                className="flex-1 accent-802"
+              />
+            </label>
+            <label className="flex items-center gap-2 text-sm text-gray-400">
+              Music
+              <input
+                type="range" min="0" max="100" value={Math.round(bgmVol * 100)}
+                onChange={(e) => { const v = Number(e.target.value) / 100; setBgmVol(v); birdShitSound.setBGMVolume(v); }}
+                className="flex-1 accent-802"
+              />
+            </label>
           </div>
         </div>
       )}
