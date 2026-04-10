@@ -234,7 +234,7 @@ const BirdShitApp = () => {
 
       {/* ── Game area ── */}
       <div
-        className={mobilePlay ? 'relative w-full h-full' : 'card p-4 flex flex-col items-center'}
+        className={mobilePlay ? 'relative w-full h-full' : 'card p-4 flex flex-col items-center relative'}
         style={pseudoFullscreen ? { position: 'fixed', inset: 0, zIndex: 9999, background: '#000' } : undefined}
       >
         <canvas
