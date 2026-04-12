@@ -17,17 +17,27 @@ export const CardSelectionOverlay = ({ cards, level, onSelect }: Props) => {
     setTimeout(() => onSelect(index), 300);
   };
 
+  const isGrid = cards.length > 4;
+
   return (
     <div
       className="absolute inset-0 z-20 flex flex-col items-center justify-center"
       style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)' }}
     >
-      <div className="text-center mb-6">
+      <div className="text-center mb-4">
         <p className="text-yellow-400 font-bold text-lg">Level {level}</p>
-        <p className="text-white text-sm mt-1">Choose an upgrade</p>
+        <p className="text-white text-sm mt-1">
+          Choose an upgrade
+          {isGrid && <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-400 font-mono">DEV: all cards</span>}
+        </p>
       </div>
 
-      <div className="flex gap-3 px-4" style={{ maxWidth: 600 }}>
+      <div
+        className={isGrid ? 'overflow-y-auto px-4 pb-2' : 'flex gap-3 px-4'}
+        style={isGrid
+          ? { display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 8, maxWidth: 680, maxHeight: '70vh' }
+          : { maxWidth: 600 }}
+      >
         {cards.map((card, i) => {
           const color = RARITY_COLORS[card.rarity];
           const bg = RARITY_BG[card.rarity];
@@ -38,7 +48,7 @@ export const CardSelectionOverlay = ({ cards, level, onSelect }: Props) => {
             <button
               key={card.id}
               onClick={() => handleSelect(i)}
-              className="flex-1 flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all duration-200"
+              className={`flex flex-col items-center gap-2 rounded-xl border-2 transition-all duration-200 ${isGrid ? 'p-3' : 'flex-1 p-4'}`}
               style={{
                 borderColor: isSelected ? color : `${color}66`,
                 background: isSelected ? `${color}22` : bg,
@@ -48,15 +58,15 @@ export const CardSelectionOverlay = ({ cards, level, onSelect }: Props) => {
                 minWidth: 0,
               }}
             >
-              <span className="text-3xl">{card.icon}</span>
-              <span className="font-bold text-sm text-white leading-tight">{card.name}</span>
+              <span className={isGrid ? 'text-2xl' : 'text-3xl'}>{card.icon}</span>
+              <span className="font-bold text-sm text-white leading-tight text-center">{card.name}</span>
               <span
                 className="text-xs font-medium px-2 py-0.5 rounded-full"
                 style={{ background: `${color}33`, color }}
               >
                 {card.rarity}
               </span>
-              <span className="text-xs text-gray-300 text-center leading-snug">{card.description}</span>
+              {!isGrid && <span className="text-xs text-gray-300 text-center leading-snug">{card.description}</span>}
             </button>
           );
         })}

@@ -85,6 +85,13 @@ export interface LightningArc {
   life: number;     // seconds remaining (visual only)
 }
 
+export interface SplashEffect {
+  x: number;
+  y: number;
+  radius: number;   // max radius in px
+  life: number;     // seconds remaining (total = 0.35s)
+}
+
 export type GameState = 'idle' | 'playing' | 'upgrading' | 'over' | 'boss' | 'relic_select';
 
 export interface GameData {
@@ -140,6 +147,7 @@ export interface GameData {
   toxicPuddles: ToxicPuddle[];
   groundTrails: GroundTrail[];
   lightningArcs: LightningArc[];
+  splashEffects: SplashEffect[];
   // Special mechanics
   shieldTimer: number;    // seconds until feather shield recharges
   shieldActive: boolean;  // whether shield can block next hit

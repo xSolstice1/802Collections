@@ -10,7 +10,7 @@ import {
   BALLOON_W, BALLOON_H, getBalloonSpawnInterval,
 } from '../constants';
 import { DEFAULT_UPGRADES, getPoopSpeed, getPoopW, getPoopH, getBirdSpeed, getHomingStrength, getPoopDamage } from '../upgrades';
-import { rollCards } from '../cards';
+import { rollCards, CARD_POOL } from '../cards';
 import { getBossForLevel } from '../bosses';
 import { rollRelics } from '../relics';
 import { BIOMES, pickBiome } from '../biomes';
@@ -38,6 +38,7 @@ interface UseGameLoopParams {
   setHighScore: (n: number) => void;
   highScoreRef: React.MutableRefObject<number>;
   playerNameRef: React.MutableRefObject<string>;
+  devModeRef: React.MutableRefObject<boolean>;
 }
 
 export function useGameLoop({
@@ -56,6 +57,7 @@ export function useGameLoop({
   setHighScore,
   highScoreRef,
   playerNameRef,
+  devModeRef,
 }: UseGameLoopParams) {
   const frameRef = useRef<number>(0);
   const prevTimeRef = useRef<number>(0);
@@ -103,6 +105,7 @@ export function useGameLoop({
     toxicPuddles: [],
     groundTrails: [],
     lightningArcs: [],
+    splashEffects: [],
     shieldTimer: 0,
     shieldActive: false,
   });
@@ -224,7 +227,7 @@ export function useGameLoop({
         // Stay in 'playing' state, boss fight is part of gameplay
       } else {
         g.running = false;
-        g.offeredCards = rollCards(g.pickedCards, 3);
+        g.offeredCards = rollCards(g.pickedCards, devModeRef.current ? CARD_POOL.length : 3);
         setGameState('upgrading');
         birdShitSound.play('level_up');
         return;
@@ -359,7 +362,7 @@ export function useGameLoop({
             setGameState('relic_select');
           } else {
             // No relics available — go to card selection
-            g.offeredCards = rollCards(g.pickedCards, 3);
+            g.offeredCards = rollCards(g.pickedCards, devModeRef.current ? CARD_POOL.length : 3);
             setGameState('upgrading');
           }
           birdShitSound.play('level_up');
@@ -386,7 +389,9 @@ export function useGameLoop({
     // Helper: scatter bomb AoE at position
     const scatterAoE = (px: number, py: number) => {
       if (!g.upgrades.scatterBomb) return;
-      const radius = 60;
+      const radius = 80;
+      // Always show ring on any impact
+      g.splashEffects.push({ x: px, y: py, radius, life: 0.35 });
       for (const ped of g.pedestrians) {
         if (ped.hit) continue;
         const dx = (ped.x + ped.w / 2) - px;
@@ -601,8 +606,9 @@ export function useGameLoop({
       if (g.upgrades.goldenGut && Math.random() < dt * 10) {
         g.groundTrails.push({ x: p.x + p.w / 2, y: p.y + p.h, life: 2.0 });
       }
-      // Poop hits ground — spawn toxic puddle
+      // Poop hits ground
       if (p.y >= GROUND_Y) {
+        scatterAoE(p.x + p.w / 2, GROUND_Y);
         spawnPuddle(p.x + p.w / 2, GROUND_Y);
         return false;
       }
@@ -648,10 +654,11 @@ export function useGameLoop({
         g.hitFlash = HIT_FLASH_TIME * 0.3; // brief flash to show shield blocked
         return;
       }
-      g.lives--;
       g.hitFlash = HIT_FLASH_TIME;
-      setLives(g.lives);
       birdShitSound.play('bullet_hit');
+      if (devModeRef.current) return; // dev mode: invincible, skip HP loss
+      g.lives--;
+      setLives(g.lives);
       if (g.lives <= 0) {
         g.running = false;
         setGameState('over');
@@ -824,6 +831,28 @@ export function useGameLoop({
       ctx.lineTo(arc.x2, arc.y2);
       ctx.stroke();
       return arc.life > 0;
+    });
+
+    // Scatter bomb splash rings: expand + fade
+    const SPLASH_DURATION = 0.35;
+    g.splashEffects = g.splashEffects.filter((fx) => {
+      fx.life -= dt;
+      const progress = 1 - fx.life / SPLASH_DURATION; // 0→1
+      const currentRadius = fx.radius * progress;
+      const alpha = (1 - progress) * 0.8;
+      ctx.strokeStyle = `rgba(255, 160, 30, ${alpha})`;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(fx.x, fx.y, currentRadius, 0, Math.PI * 2);
+      ctx.stroke();
+      // Inner fill flash at start
+      if (progress < 0.3) {
+        ctx.fillStyle = `rgba(255, 220, 80, ${(0.3 - progress) * 1.5})`;
+        ctx.beginPath();
+        ctx.arc(fx.x, fx.y, currentRadius * 0.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      return fx.life > 0;
     });
 
     // Draw boss
@@ -1013,7 +1042,7 @@ export function useGameLoop({
     birdShitSound.play('card_select');
 
     // After relic, offer card selection
-    g.offeredCards = rollCards(g.pickedCards, 3);
+    g.offeredCards = rollCards(g.pickedCards, devModeRef.current ? CARD_POOL.length : 3);
     setGameState('upgrading');
   }, [setLives, setGameState]);
 
@@ -1075,6 +1104,7 @@ export function useGameLoop({
     g.toxicPuddles = [];
     g.groundTrails = [];
     g.lightningArcs = [];
+    g.splashEffects = [];
     g.shieldTimer = 0;
     g.shieldActive = false;
     setDifficulty(g, 1);
