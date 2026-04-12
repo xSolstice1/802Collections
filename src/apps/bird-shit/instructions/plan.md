@@ -2,74 +2,91 @@
 
 ## Current Status
 
-Fully playable, fully modular. Refactor complete. Six distinct bird species selectable
-before game start. Core loop, upgrades, leaderboard, mobile controls, fullscreen all working.
+Fully playable roguelite arcade game. Modular codebase. Six bird species, card-based
+upgrade system, relic rewards, boss fights, biomes, combo scoring, meta-progression,
+sound, dev mode, daily/seeded run modes, mobile controls, fullscreen.
 
 ---
 
 ## ✅ Priority 1 — Refactor: Split into Modules
 
-**Done.** `BirdShitApp.tsx` split from ~2030 lines into focused modules:
-`constants.ts`, `types.ts`, `upgrades.ts`, `skins.ts`, `renderers/*`, `hooks/*`.
-`BirdShitApp.tsx` is now ~580 lines (state wiring + JSX only).
+**Done.** Fully modular. `BirdShitApp.tsx` handles React state + JSX only.
 
 ---
 
-## ✅ Priority 2 — Bird Species (formerly "Skins")
+## ✅ Priority 2 — Bird Species
 
-**Done.** Implemented as `DrawBirdFn` function-per-species architecture (not color palettes).
-
-Six species, each with its own draw file in `renderers/`:
-
-| ID | Name | Unlock |
-|---|---|---|
-| `classic` | Parakeet | Free |
-| `magpie` | Magpie | Free |
-| `cockatiel` | Cockatiel | Score ≥ 250 |
-| `owl` | Owl | Score ≥ 500 |
-| `toucan` | Toucan | Score ≥ 1500 |
-| `eagle` | Eagle | Score ≥ 3000 |
-
-Skin chosen before game start only (selector hidden during play). Persisted to `localStorage`.
-
-See `specs/bird-skins.md` for full design.
+**Done.** Six species via `DrawBirdFn` architecture. See `specs/bird-skins.md`.
 
 ---
 
-## Priority 3 — Difficulty Balancing
+## ✅ Priority 3 — Difficulty Balancing
 
-Current level scaling is linear. Review and tune:
+**Done.** Reviewed and tuned:
 
-- Hunter spawn rate at high levels (currently can flood the screen)
-- Bullet speed curve (can become near-impossible past level 15)
-- Coin income vs upgrade costs ratio
-- Consider adding a "soft cap" past level 20 to plateau difficulty
-
----
-
-## Priority 4 — New Game Mechanics
-
-Potential additions (pick based on player feedback):
-
-- **Poop streak bonus** — consecutive hits multiply score (x2, x3 combo)
-- **Boss levels** — every 5 levels, a large target appears worth big points
-- **Power-ups** — temporary invincibility star, poop frenzy, coin magnet
-- **Environment variety** — different backdrops per level (city, forest, beach)
+- Scroll speed, spawn intervals, hunter shoot rate all scale per level
+- Difficulty formula: `setDifficulty(g, lvl)` in `useGameLoop.ts`
+- Boss fights at specific levels break up difficulty curve
+- Biomes (6 total) introduce environmental variety
 
 ---
 
-## Priority 5 — Polish
+## ✅ Priority 4 — New Game Mechanics
 
-- Particle effects on poop hit (splat animation)
+**Done:**
+
+- **Boss levels** — every N levels triggers one of 3 boss types
+- **Card system** — roguelite level-up: choose from 3 upgrade cards (all cards in dev mode)
+- **Relic system** — post-boss reward: passive bonuses applied to run
+- **Poop streak bonus** — combo multiplier (x1.25 per hit, resets after 2s)
+- **Power-ups** — scatter bomb (AoE), homing poop, toxic poop, feather shield, storm gut (chain lightning), golden gut (ground trails)
+- **Environment variety** — 6 biomes with distinct sky/ground/wind
+
+---
+
+## ✅ Priority 5 — Polish
+
+**Done:**
+
+- Particle effects on AoE hit (expanding orange ring via `splashEffects`)
+- Toxic puddles (green ground hazard)
+- Chain lightning arcs (visual between enemies)
+- Golden gut ground trails
+- Screen-space hit flash on bird
+- Sound system via Web Audio API (`sound.ts`)
+- Game over screen with score + level display
+- Meta-progression (cross-run currency + upgrades)
+- Dev mode (localhost only): invincibility + all cards
+
+---
+
+## Remaining / Future Work
+
+### Difficulty Tuning
+
+- Hunter spawn rate at high levels (can flood screen past level 15)
+- Bullet speed curve (near-impossible past level 20)
+- Consider soft cap past level 20
+
+### Polish
+
 - Screen shake on bullet hit
-- Sound effects (wing flap, splat, bullet whiz) via Web Audio API
-- Game over screen with stats breakdown (hits, misses, accuracy %)
+- Game over stats breakdown (hits, misses, accuracy %)
+- Particle splat animation on direct ped/hunter hit
+
+### Content
+
+- Additional boss types
+- Additional biome types
+- Additional relic pool entries
 
 ---
 
-## Decisions & Notes
+## Architecture Decisions
 
-- Keep all game state in `gameRef` (mutable ref) for zero-re-render game loop performance; React state is only for UI display
-- Draw functions are pure — they receive all needed data as parameters, no closures on game state
-- `dropPoopRef`, `startGameRef`, `buyUpgradeRef` pattern avoids stale closure issues inside event listeners
-- Leaderboard submit is fire-and-forget; never block game over screen on network
+- All game state in `gameRef` (mutable ref) — zero re-renders in game loop
+- Draw functions are pure — no closures on game state
+- `dropPoopRef`, `startGameRef`, `buyUpgradeRef` pattern avoids stale closures in event listeners
+- Leaderboard submit is fire-and-forget — never block game-over screen on network
+- Card system uses `rollCards(pickedCards, count)` — respects `maxStacks` per card
+- Dev mode gated to `window.location.hostname === 'localhost'`

@@ -5,6 +5,9 @@
 On mobile (`isMobile = true`), the game enters a fullscreen overlay mode (`mobilePlay = true`)
 once the player starts. Controls use a floating joystick on the left half and a poop button on the right.
 
+Mobile HUD (top-right during `mobilePlay`): sound toggle, leaderboard, settings, fullscreen buttons.
+Settings modal accessible on mobile — includes dev mode toggle when on localhost.
+
 ---
 
 ## Joystick (left half)

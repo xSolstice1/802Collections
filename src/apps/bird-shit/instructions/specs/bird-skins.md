@@ -33,7 +33,8 @@ export interface BirdSkin {
 Each species is a standalone file in `renderers/`. The game loop calls:
 
 ```ts
-selectedSkinRef.current(ctx, g.birdX, g.birdY, g.wingUp, g.hitFlash > 0 && g.hitFlash % 4 < 2);
+selectedSkinRef.current(ctx, g.birdX, g.birdY, g.wingUp,
+  g.hitFlash > 0 && Math.floor(g.hitFlash * 60) % 4 < 2);
 ```
 
 `selectedSkinRef` is a `MutableRefObject<DrawBirdFn>` updated every render from React state,
@@ -47,7 +48,7 @@ so the game loop always uses the latest selection with zero re-renders.
 |---|---|---|---|---|
 | `classic` | Parakeet | `drawBird.ts` | Green body, radial gradient, yellow beak | Free |
 | `magpie` | Magpie | `drawBirdMagpie.ts` | Black/white, long iridescent blue-green tail | Free |
-| `cockatiel` | Cockatiel | `drawBirdCrowned.ts` | Grey body, yellow face patch, orange cheek, erect yellow crest | 250 |
+| `cockatiel` | Cockatiel | `drawBirdCrowned.ts` | Grey body, yellow face patch, orange cheek, erect yellow crest | Score ≥ 250 |
 | `owl` | Owl | `drawBirdOwl.ts` | Warm brown, cream facial disk, ear tufts, two large yellow forward-facing eyes | 500 |
 | `toucan` | Toucan | `drawBirdToucan.ts` | Glossy black, white bib, massive bill (green→yellow→orange→red) | 1500 |
 | `eagle` | Eagle | `drawBirdEagle.ts` | Dark brown body, white head & tail, large hooked yellow beak | 3000 |
@@ -69,9 +70,9 @@ All draw functions share the same signature and use `BIRD_W=36, BIRD_H=28`:
 
 ## UI — Skin Selector
 
-Shown only when `gameState === 'idle'` (hidden during play, over, upgrading).
+Accessible via the "Loadout" pre-game modal (bird icon button in toolbar).
+Shown only when `gameState === 'idle'` or `over` (hidden during active play).
 
-- Rendered as a DOM card below the leaderboard button
 - 6-column grid (3 on mobile), one button per species
 - Each button contains a `SkinPreview` canvas (80×52px, `imageRendering: pixelated`)
   that calls `draw(ctx, 12, 14, true, false)` directly
