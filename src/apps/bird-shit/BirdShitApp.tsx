@@ -90,12 +90,16 @@ const BirdShitApp = () => {
   const [soundMuted, setSoundMuted] = useState(false);
   const [sfxVol, setSfxVol] = useState(0.3);
   const [bgmVol, setBgmVol] = useState(0.15);
+  const [devMode, setDevMode] = useState(false);
+  const devModeRef = useRef(false);
+  devModeRef.current = devMode;
 
   // Game loop hook
   const { gameRef, redrawUpgradeScreen, startGame, dropPoop, selectCard, selectRelic, continueFromUpgrade, startWithMode } =
     useGameLoop({
       canvasRef, keysRef, selectedSkinRef, startGameRef, dropPoopRef, buyUpgradeRef, submitScoreRef,
       setGameState, setScore, setLives, setCoins, setLevel, setHighScore, highScoreRef, playerNameRef,
+      devModeRef,
     });
 
   // Controls hook
@@ -301,6 +305,7 @@ const BirdShitApp = () => {
                   <p className="text-sm text-gray-500 font-mono">Lv.<span className="text-yellow-400 font-bold">{level}</span></p>
                   <p className="text-sm text-gray-500 font-mono"><span className="text-red-400 font-bold">{lives}</span> HP</p>
                   <p className="text-sm text-gray-500 font-mono"><span className="text-yellow-400 font-bold">{coins}</span> 🪙</p>
+                  {devMode && <span className="text-xs font-mono font-bold px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-400 border border-orange-500/30">DEV</span>}
                 </div>
               )}
             </div>
@@ -395,6 +400,22 @@ const BirdShitApp = () => {
               <p className="text-xs text-gray-500 font-medium mb-1">📅 Daily Challenge</p>
               <p className="text-xs text-gray-400">Same seed for all players today. Enemy spawns and card offerings are identical — compete for the best score on a level playing field!</p>
             </div>
+
+            {/* Dev Mode — localhost only */}
+            {window.location.hostname === 'localhost' && <div className="border-t border-gray-700 pt-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-mono font-bold text-orange-400">DEV MODE</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Invincibility · All upgrade cards</p>
+                </div>
+                <button
+                  onClick={() => setDevMode((v) => !v)}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${devMode ? 'bg-orange-500' : 'bg-gray-600'}`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${devMode ? 'translate-x-6' : 'translate-x-1'}`} />
+                </button>
+              </div>
+            </div>}
           </div>
         </div>
       )}
